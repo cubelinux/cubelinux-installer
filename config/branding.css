@@ -1,0 +1,23 @@
+#brand::before {
+    content: "cubelinux";
+}
+
+.anaconda {
+    --brand-default-light: #a6d7ff;
+    --brand-default: #1688d4;
+    --brand-default-dark: #0866a8;
+
+    .logo {
+        background-image: url("logo.png");
+    }
+}
+
+:not(.pf-v6-theme-dark) .anaconda {
+    --pf-t--global--color--brand--default: var(--brand-default);
+    --pf-t--global--color--brand--hover: var(--brand-default-dark);
+}
+
+.pf-v6-theme-dark .anaconda {
+    --pf-t--global--color--brand--default: var(--brand-default-light);
+    --pf-t--global--color--brand--hover: var(--brand-default);
+}

@@ -1,0 +1,6 @@
+label: "cubelinux-installer"
+grub2:
+  entries:
+    - name: "Install cubelinux"
+      linux: "/images/pxeboot/vmlinuz inst.stage2=hd:LABEL=cubelinux-installer console=tty0 inst.graphical selinux=0 rhgb quiet"
+      initrd: "/images/pxeboot/initrd.img"
