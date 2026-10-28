@@ -41,6 +41,6 @@ RUN printf 'bootc --source-imgref=containers-storage:%s --target-imgref=%s\n' \
     mv /etc/yum.repos.d /etc/anaconda.repos.d && \
     ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
     rm -f /usr/lib/systemd/system-generators/systemd-gpt-auto-generator && \
-    ln -s /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service && \
+    ln -sfn /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service && \
     mkdir -p /usr/lib/systemd/logind.conf.d && \
     printf '[Login]\nReserveVT=2\n' > /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
