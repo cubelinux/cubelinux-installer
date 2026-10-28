@@ -11,6 +11,7 @@ permissions:
 
 env:
   CUBELINUX_IMAGE_REF: ${{ vars.CUBELINUX_IMAGE_REF || 'ghcr.io/cubelinux/cubelinux:main' }}
+  SOURCEFORGE_PROJECT: ${{ vars.SOURCEFORGE_PROJECT || 'cubelinux-installer' }}
 
 jobs:
   build-and-publish:
@@ -36,6 +37,10 @@ jobs:
           fi
           if [[ -n "$GHCR_TOKEN" && -z "$GHCR_USERNAME" ]]; then
             echo "Set GHCR_USERNAME when GHCR_TOKEN is configured." >&2
+            exit 1
+          fi
+          if [[ ! "$SOURCEFORGE_PROJECT" =~ ^[a-z0-9-]+$ ]]; then
+            echo "SOURCEFORGE_PROJECT must contain only lowercase letters, digits, and hyphens." >&2
             exit 1
           fi
 
@@ -95,4 +100,4 @@ jobs:
             "output/$iso_name" \
             "output/$iso_name.sha256" \
             output/cubelinux-installer-build.txt \
-            "$SOURCEFORGE_USER@frs.sourceforge.net:/home/frs/project/cubelinux-installer/"
+            "$SOURCEFORGE_USER@frs.sourceforge.net:/home/frs/project/$SOURCEFORGE_PROJECT/"
