@@ -55,6 +55,7 @@ jobs:
             --env CUBELINUX_IMAGE_REF \
             --env GHCR_USERNAME \
             --env GHCR_TOKEN \
+            --env CUBELINUX_CI_PRUNE=1 \
             --env GITHUB_SHA \
             fedora:44 bash -euc '
               dnf -y install podman image-builder coreutils findutils
@@ -64,6 +65,9 @@ jobs:
               fi
               bash ./scripts/build-iso.sh
             '
+
+      - name: Remove Fedora builder image
+        run: docker image rm fedora:44
 
       - name: Verify SourceForge SSH host key
         run: |
@@ -101,3 +105,10 @@ jobs:
             "output/$iso_name.sha256" \
             output/cubelinux-installer-build.txt \
             "$SOURCEFORGE_USER@frs.sourceforge.net:/home/frs/project/$SOURCEFORGE_PROJECT/"
+
+      - name: Remove local ISO after upload
+        if: success()
+        run: |
+          iso_name="cubelinux-installer-${GITHUB_SHA}.iso"
+          rm -f "output/$iso_name" "output/$iso_name.sha256" \
+            output/cubelinux-installer-build.txt

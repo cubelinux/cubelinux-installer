@@ -54,7 +54,9 @@ The ISO is a release artifact, separate from the bootc image release. The
 GitHub Actions workflow builds on every push to `main` and uploads a separate
 ISO, checksum, and source commit record to the SourceForge File Release
 System. The ISO filename contains the full Git commit hash, so each upload is
-retained as its own file and uses additional SourceForge storage.
+retained as its own file and uses additional SourceForge storage. The build
+prunes container images and caches when finished, removes the Fedora builder
+image before upload, and deletes the local ISO after a successful upload.
 
 Configure these repository secrets before enabling uploads:
 
