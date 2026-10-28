@@ -24,6 +24,8 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         python3 \
         && dnf clean all
 
+RUN mkdir -p /usr/local/sbin
+
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
