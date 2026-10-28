@@ -31,12 +31,18 @@ The resulting ISO is written under `output/`. The source image is embedded in
 the ISO, so installation should not need to download the OS image. The same
 reference is retained as the installed system's update origin.
 
+The cubelinux SVG logo is available at
+[icon.svg](https://pub-eb590fbfc3074776ad4199c13b93d722.r2.dev/logo/icon.svg).
+The ISO includes a local PNG logo because Anaconda Web UI's branding guide
+uses `logo.png` for the installer header.
+
 ## Project layout
 
 ```text
 cubelinux-installer/
 |-- assets/
-|   `-- cubelinux-icon.png       # Installer branding asset
+|   |-- cubelinux-icon.png       # Anaconda Web UI logo
+|   `-- cubelinux-icon.svg       # Vector source logo
 |-- config/
 |   |-- anaconda.conf           # Hide account creation page
 |   |-- branding.css            # Anaconda Web UI branding
