@@ -59,6 +59,9 @@ jobs:
             --env GITHUB_SHA \
             fedora:44 bash -euc '
               dnf -y install podman image-builder coreutils findutils
+              mkdir -p /etc/containers/containers.conf.d
+              printf "[containers]\ncgroups = \"disabled\"\n" \
+                > /etc/containers/containers.conf.d/99-github-actions.conf
               if [[ -n "${GHCR_TOKEN:-}" ]]; then
                 printf "%s" "$GHCR_TOKEN" | podman login ghcr.io \
                   --username "$GHCR_USERNAME" --password-stdin
