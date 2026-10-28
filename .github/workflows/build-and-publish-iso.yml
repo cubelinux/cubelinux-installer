@@ -1,0 +1,98 @@
+name: Build and publish installer ISO
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CUBELINUX_IMAGE_REF: ${{ vars.CUBELINUX_IMAGE_REF || 'ghcr.io/cubelinux/cubelinux:main' }}
+
+jobs:
+  build-and-publish:
+    name: Build ISO and upload SourceForge release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out installer project
+        uses: actions/checkout@v4
+
+      - name: Check publishing configuration
+        env:
+          SOURCEFORGE_USER: ${{ secrets.SOURCEFORGE_USER }}
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_SSH_KEY_PASSPHRASE: ${{ secrets.SOURCEFORGE_SSH_KEY_PASSPHRASE }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          if [[ -z "$SOURCEFORGE_USER" || -z "$SOURCEFORGE_SSH_KEY" || -z "$SOURCEFORGE_SSH_KEY_PASSPHRASE" ]]; then
+            echo "Set SOURCEFORGE_USER, SOURCEFORGE_SSH_KEY, and SOURCEFORGE_SSH_KEY_PASSPHRASE repository secrets." >&2
+            exit 1
+          fi
+          if [[ -n "$GHCR_TOKEN" && -z "$GHCR_USERNAME" ]]; then
+            echo "Set GHCR_USERNAME when GHCR_TOKEN is configured." >&2
+            exit 1
+          fi
+
+      - name: Build installer ISO
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          docker run --rm --privileged \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env CUBELINUX_IMAGE_REF \
+            --env GHCR_USERNAME \
+            --env GHCR_TOKEN \
+            --env GITHUB_SHA \
+            fedora:44 bash -euc '
+              dnf -y install podman image-builder coreutils findutils
+              if [[ -n "${GHCR_TOKEN:-}" ]]; then
+                printf "%s" "$GHCR_TOKEN" | podman login ghcr.io \
+                  --username "$GHCR_USERNAME" --password-stdin
+              fi
+              bash ./scripts/build-iso.sh
+            '
+
+      - name: Verify SourceForge SSH host key
+        run: |
+          host_key="$RUNNER_TEMP/sourceforge-host-key"
+          ssh-keyscan -t ed25519 frs.sourceforge.net 2>/dev/null > "$host_key"
+          fingerprint="$(ssh-keygen -lf "$host_key" -E sha256 | awk '{print $2}')"
+          if [[ "$fingerprint" != "SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY" ]]; then
+            echo "SourceForge host key did not match its published fingerprint." >&2
+            exit 1
+          fi
+          install -m 600 "$host_key" "$RUNNER_TEMP/sourceforge-known-hosts"
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Upload commit ISO release to SourceForge
+        env:
+          SOURCEFORGE_USER: ${{ secrets.SOURCEFORGE_USER }}
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_SSH_KEY_PASSPHRASE: ${{ secrets.SOURCEFORGE_SSH_KEY_PASSPHRASE }}
+        run: |
+          iso_name="cubelinux-installer-${GITHUB_SHA}.iso"
+          eval "$(ssh-agent -s)" >/dev/null
+          askpass="$RUNNER_TEMP/ssh-askpass"
+          cat > "$askpass" <<'EOF'
+          #!/bin/sh
+          printf '%s\n' "$SOURCEFORGE_SSH_KEY_PASSPHRASE"
+          EOF
+          chmod 700 "$askpass"
+          export DISPLAY=:0 SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force
+          printf '%s\n' "$SOURCEFORGE_SSH_KEY" | tr -d '\r' | ssh-add - >/dev/null
+          rsync --archive --partial --progress \
+            --rsh="ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/sourceforge-known-hosts" \
+            "output/$iso_name" \
+            "output/$iso_name.sha256" \
+            output/cubelinux-installer-build.txt \
+            "$SOURCEFORGE_USER@frs.sourceforge.net:/home/frs/project/cubelinux-installer/"
