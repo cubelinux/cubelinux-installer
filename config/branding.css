@@ -6,10 +6,6 @@
     --brand-default-light: #a6d7ff;
     --brand-default: #1688d4;
     --brand-default-dark: #0866a8;
-
-    .logo {
-        background-image: url("logo.png");
-    }
 }
 
 :not(.pf-v6-theme-dark) .anaconda {

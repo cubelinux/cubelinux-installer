@@ -39,7 +39,6 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
 COPY config/branding.css /usr/share/cockpit/branding/fedora/branding.css
-COPY assets/cubelinux-icon.png /usr/share/cockpit/branding/fedora/logo.png
 
 RUN printf 'bootc --source-imgref=containers-storage:%s --target-imgref=%s\n' \
         "${CUBELINUX_IMAGE_REF}" "${CUBELINUX_IMAGE_REF}" \
