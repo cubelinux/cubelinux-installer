@@ -62,6 +62,9 @@ Configure these repository secrets before enabling uploads:
 - `SOURCEFORGE_SSH_KEY`: the private SSH key registered with that account
 - `SOURCEFORGE_SSH_KEY_PASSPHRASE`: the passphrase for that private key
 
+Set the `SOURCEFORGE_PROJECT` repository variable to the SourceForge project
+URL slug. It defaults to `cubelinux-installer`.
+
 Optionally set the `CUBELINUX_IMAGE_REF` repository variable to choose a
 different published bootc image. For a private GHCR package, also configure
 `GHCR_USERNAME` and `GHCR_TOKEN` secrets with pull access. The default is
