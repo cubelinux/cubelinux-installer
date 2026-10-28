@@ -21,8 +21,16 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         grub2-common \
         grub2-pc-modules \
         podman \
+        fuse-overlayfs \
         python3 \
         && dnf clean all
+
+# osbuild deploys the embedded bootc payload into this image's container store.
+# The store lives on the runner's overlay filesystem, so nested overlay needs
+# fuse-overlayfs configured in the image tree itself.
+RUN mkdir -p /etc/containers && \
+    printf '[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "/usr/bin/fuse-overlayfs"\n' \
+        > /etc/containers/storage.conf
 
 RUN mkdir -p /usr/local/sbin
 
