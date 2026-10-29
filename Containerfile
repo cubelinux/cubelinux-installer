@@ -25,9 +25,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         python3 \
         && dnf clean all
 
-# osbuild deploys the embedded bootc payload into this image's container store.
-# The store lives on the runner's overlay filesystem, so nested overlay needs
-# fuse-overlayfs configured in the image tree itself.
+# Keep Podman's storage usable if Anaconda or bootc needs it in the live system.
 RUN mkdir -p /etc/containers && \
     printf '[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "/usr/bin/fuse-overlayfs"\n' \
         > /etc/containers/storage.conf
@@ -39,9 +37,10 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
 COPY config/branding.css /usr/share/cockpit/branding/fedora/branding.css
+COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 
-RUN printf 'bootc --source-imgref=containers-storage:%s --target-imgref=%s\n' \
-        "${CUBELINUX_IMAGE_REF}" "${CUBELINUX_IMAGE_REF}" \
+RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload --target-imgref=%s\n' \
+        "${CUBELINUX_IMAGE_REF}" \
         > /usr/share/anaconda/interactive-defaults.ks && \
     echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \

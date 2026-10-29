@@ -59,13 +59,7 @@ jobs:
             --env CUBELINUX_CI_PRUNE=1 \
             --env GITHUB_SHA \
             fedora:44 bash -euc '
-              osbuild_fs="$(stat -f -c %T /run/osbuild)"
-              printf "OSBuild work directory filesystem: %s\n" "$osbuild_fs"
-              if [[ "$osbuild_fs" == "overlayfs" ]]; then
-                echo "/run/osbuild is overlay-backed; refusing to run nested overlay storage." >&2
-                exit 1
-              fi
-              dnf -y install podman image-builder coreutils findutils fuse-overlayfs
+              dnf -y install podman skopeo image-builder coreutils findutils fuse-overlayfs
               mkdir -p /etc/containers/containers.conf.d
               printf "[containers]\ncgroups = \"disabled\"\n" \
                 > /etc/containers/containers.conf.d/99-github-actions.conf

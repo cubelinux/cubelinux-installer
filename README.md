@@ -17,7 +17,8 @@ no account is requested, and that Plasma Setup starts after reboot.
 
 ## Build prerequisites
 
-Use a Fedora 44 x86_64 build host with Podman and `image-builder` installed.
+Use a Fedora 44 x86_64 build host with Podman, Skopeo, and `image-builder`
+installed.
 The build needs root privileges for image-builder's loop devices and mounts.
 The cubelinux image must be published in a registry accessible to the builder.
 
@@ -28,8 +29,9 @@ sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main bash ./scripts/build-i
 ```
 
 The resulting ISO is written under `output/`. The source image is embedded in
-the ISO, so installation should not need to download the OS image. The same
-reference is retained as the installed system's update origin.
+the installer image as an OCI archive, so installation should not need to
+download the OS image. The same registry reference is retained as the
+installed system's update origin.
 
 ## Project layout
 
@@ -76,7 +78,8 @@ different published bootc image. For a private GHCR package, also configure
   installer flow and release notes.
 - The installer must not collect or create user account information.
 - Anaconda's account page is hidden; verify this in the built Web UI.
-- The selected cubelinux payload must match the exact `containers-storage:`
-  reference used by the ISO build so the embedded payload is used offline.
+- The selected cubelinux payload is embedded as an OCI archive and installed
+  from that local archive, while its registry reference remains the update
+  origin for the installed system.
 - Do not publish an ISO until the installed system has been confirmed to boot
   into the existing Plasma Setup account flow.
