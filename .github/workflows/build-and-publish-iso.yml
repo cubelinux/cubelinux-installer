@@ -64,6 +64,7 @@ jobs:
                 > /etc/containers/containers.conf.d/99-github-actions.conf
               printf "[storage]\ndriver = \"overlay\"\n\n[storage.options.overlay]\nmount_program = \"/usr/bin/fuse-overlayfs\"\n" \
                 > /etc/containers/storage.conf
+              export CONTAINERS_STORAGE_CONF=/etc/containers/storage.conf
               if [[ -n "${GHCR_TOKEN:-}" ]]; then
                 printf "%s" "$GHCR_TOKEN" | podman login ghcr.io \
                   --username "$GHCR_USERNAME" --password-stdin
