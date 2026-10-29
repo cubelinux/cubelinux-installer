@@ -118,5 +118,5 @@ jobs:
         if: success()
         run: |
           iso_name="cubelinux-installer-${GITHUB_SHA}.iso"
-          rm -f "output/$iso_name" "output/$iso_name.sha256" \
+          sudo rm -f "output/$iso_name" "output/$iso_name.sha256" \
             output/cubelinux-installer-build.txt
