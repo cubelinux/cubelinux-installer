@@ -1,5 +1,8 @@
 # cubelinux-installer
 
+[![Build and publish installer ISO](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml/badge.svg)](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml)
+[![Build and publish bootc image](https://github.com/cubelinux/cubelinux/actions/workflows/image-and-release.yml/badge.svg)](https://github.com/cubelinux/cubelinux/actions/workflows/image-and-release.yml)
+
 Build the bootable cubelinux installer ISO as a project separate from the
 cubelinux operating-system image. The ISO uses Fedora Anaconda Web UI, embeds
 the selected cubelinux bootc image, lets the user choose a target disk, and
