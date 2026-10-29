@@ -58,10 +58,12 @@ jobs:
             --env CUBELINUX_CI_PRUNE=1 \
             --env GITHUB_SHA \
             fedora:44 bash -euc '
-              dnf -y install podman image-builder coreutils findutils
+              dnf -y install podman image-builder coreutils findutils fuse-overlayfs
               mkdir -p /etc/containers/containers.conf.d
               printf "[containers]\ncgroups = \"disabled\"\n" \
                 > /etc/containers/containers.conf.d/99-github-actions.conf
+              printf "[storage]\ndriver = \"overlay\"\n\n[storage.options.overlay]\nmount_program = \"/usr/bin/fuse-overlayfs\"\n" \
+                > /etc/containers/storage.conf
               if [[ -n "${GHCR_TOKEN:-}" ]]; then
                 printf "%s" "$GHCR_TOKEN" | podman login ghcr.io \
                   --username "$GHCR_USERNAME" --password-stdin

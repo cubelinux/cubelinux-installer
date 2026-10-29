@@ -21,15 +21,24 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         grub2-common \
         grub2-pc-modules \
         podman \
+        fuse-overlayfs \
         python3 \
         && dnf clean all
+
+# osbuild deploys the embedded bootc payload into this image's container store.
+# The store lives on the runner's overlay filesystem, so nested overlay needs
+# fuse-overlayfs configured in the image tree itself.
+RUN mkdir -p /etc/containers && \
+    printf '[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "/usr/bin/fuse-overlayfs"\n' \
+        > /etc/containers/storage.conf
+
+RUN mkdir -p /usr/local/sbin
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
 COPY config/branding.css /usr/share/cockpit/branding/fedora/branding.css
-COPY assets/cubelinux-icon.png /usr/share/cockpit/branding/fedora/logo.png
 
 RUN printf 'bootc --source-imgref=containers-storage:%s --target-imgref=%s\n' \
         "${CUBELINUX_IMAGE_REF}" "${CUBELINUX_IMAGE_REF}" \
