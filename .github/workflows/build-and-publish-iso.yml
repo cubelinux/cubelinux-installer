@@ -11,7 +11,7 @@ permissions:
 
 env:
   CUBELINUX_IMAGE_REF: ${{ vars.CUBELINUX_IMAGE_REF || 'ghcr.io/cubelinux/cubelinux:main' }}
-  SOURCEFORGE_PROJECT: ${{ vars.SOURCEFORGE_PROJECT || 'cubelinux-installer' }}
+  SOURCEFORGE_PROJECT: ${{ vars.SOURCEFORGE_PROJECT || 'vibolvireak' }}
 
 jobs:
   build-and-publish:
@@ -97,6 +97,7 @@ jobs:
           SOURCEFORGE_SSH_KEY_PASSPHRASE: ${{ secrets.SOURCEFORGE_SSH_KEY_PASSPHRASE }}
         run: |
           iso_name="cubelinux-installer-${GITHUB_SHA}.iso"
+          echo "Uploading to SourceForge FRS project: $SOURCEFORGE_PROJECT"
           eval "$(ssh-agent -s)" >/dev/null
           askpass="$RUNNER_TEMP/ssh-askpass"
           cat > "$askpass" <<'EOF'
