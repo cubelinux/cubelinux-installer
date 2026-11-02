@@ -55,6 +55,7 @@ RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.t
     echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \
+    systemctl mask bootloader-update.service && \
     mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives && \
     mv /etc/yum.repos.d /etc/anaconda.repos.d && \
     ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
