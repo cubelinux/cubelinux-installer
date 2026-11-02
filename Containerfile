@@ -28,7 +28,8 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
 
 # The generic ISO boots the installer from its embedded LiveOS/squashfs.img.
 # Include the live-root module so dracut mounts that filesystem at /sysroot.
-RUN kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
+RUN mkdir -p "$(realpath /root)" && \
+    kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
     test -n "$kernel" && \
     DRACUT_NO_XATTR=1 dracut --force --no-hostonly \
         --add "anaconda dmsquash-live" \

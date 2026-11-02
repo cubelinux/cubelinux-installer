@@ -1,5 +1,6 @@
 label: "cubelinux-installer"
 grub2:
+  timeout: 2
   entries:
     - name: "Install cubelinux"
       linux: "${kernelpath} ${root} inst.graphical console=tty0 selinux=0 rhgb quiet"
