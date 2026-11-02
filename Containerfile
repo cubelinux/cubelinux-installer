@@ -8,6 +8,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         anaconda-webui \
         anaconda-install-img-deps \
         anaconda-dracut \
+        dracut-live \
         dracut-config-generic \
         dracut-network \
         net-tools \
@@ -24,6 +25,14 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         fuse-overlayfs \
         python3 \
         && dnf clean all
+
+# The generic ISO boots the installer from its embedded LiveOS/squashfs.img.
+# Include the live-root module so dracut mounts that filesystem at /sysroot.
+RUN kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
+    test -n "$kernel" && \
+    DRACUT_NO_XATTR=1 dracut --force --no-hostonly \
+        --add "anaconda dmsquash-live" \
+        "/usr/lib/modules/${kernel}/initramfs.img" "$kernel"
 
 # Keep Podman's storage usable if Anaconda or bootc needs it in the live system.
 RUN mkdir -p /etc/containers && \
