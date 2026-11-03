@@ -25,7 +25,7 @@ RUN dnf -y install \
     && dnf clean all
 
 # Build a generic initramfs that can boot the live ISO on varied hardware.
-RUN install -d /root && \
+RUN mkdir -p "$(realpath /root)" && \
     kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
     test -n "$kernel" && \
     DRACUT_NO_XATTR=1 dracut --force --no-hostonly \
