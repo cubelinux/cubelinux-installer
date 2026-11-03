@@ -22,6 +22,19 @@ done
 mkdir -p "$OUTPUT_DIR"
 podman build --tag "$IMAGE_REF" --file "$ROOT/Containerfile" "$ROOT"
 
+{
+    printf 'Built at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'Source revision: %s\n' "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD 2>/dev/null || printf unknown)"
+    printf 'Source changes:\n'
+    git -c safe.directory="$ROOT" -C "$ROOT" status --short 2>/dev/null || true
+    printf 'Smoke image ID: '
+    podman image inspect --format '{{.Id}}' "$IMAGE_REF" || true
+    printf 'Fedora base image ID: '
+    podman image inspect --format '{{.Id}}' quay.io/fedora/fedora-bootc:44 || true
+    printf 'image-builder version: '
+    image-builder --version || true
+} > "$OUTPUT_DIR/${OUTPUT_NAME}.build-info.txt" 2>&1
+
 image-builder build \
     --output-dir "$OUTPUT_DIR" \
     --output-name "$OUTPUT_NAME" \

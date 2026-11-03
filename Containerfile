@@ -21,6 +21,8 @@ RUN dnf -y install \
         grub2-pc-modules \
         podman \
         fuse-overlayfs \
+        procps-ng \
+        strace \
         python3 \
     && dnf clean all
 
@@ -34,6 +36,8 @@ RUN mkdir -p "$(realpath /root)" && \
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-smoke-test.conf
+COPY scripts/cubelinux-smoke-debug /usr/local/bin/cubelinux-smoke-debug
+RUN chmod 0755 /usr/local/bin/cubelinux-smoke-debug
 
 # Start Anaconda in the live session, but do not configure any install payload
 # or kickstart command. Keep the test environment independent of DNF repos.

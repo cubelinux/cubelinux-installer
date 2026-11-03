@@ -23,15 +23,42 @@ sudo bash ./scripts/build-iso.sh
 
 The ISO and its SHA-256 checksum are written to `output/`.
 
+## Diagnose the Hyper-V startup failure
+
+The first boot-menu entry now starts a shell. Anaconda stays stopped until its
+logs have somewhere persistent to go. Attach a **separate, writable diagnostic
+disk** to the disposable VM and mount its existing partition. Do not format or
+mount the disk you intend to use as an installation target. For example, after
+checking the device name with `lsblk -f`:
+
+```sh
+mkdir -p /mnt/diagnostics
+mount /dev/sdb1 /mnt/diagnostics
+cubelinux-smoke-debug /mnt/diagnostics
+```
+
+Replace `/dev/sdb1` with the actual diagnostic partition. The command refuses
+to start if the directory is not a separate writable mount. It masks the normal
+systemd shutdown targets for this boot, verifies those masks, starts Anaconda
+once, and saves a live journal stream, snapshots, Anaconda logs, process list,
+and package versions to a timestamped directory on the diagnostic disk. It also
+requests Python thread dumps and a payload trace when their processes can be
+verified. It runs for up to 30 minutes; press Ctrl+C to stop it early.
+The mask cannot prevent a kernel panic or a Hyper-V reset. After a reboot,
+mount the same disk again and inspect its `cubelinux-smoke-*` directory. The
+`journal-follow.log`, `anaconda-units.txt`, `logs/anaconda-tb-all.log`, and
+`strace-payload*` files are the first ones to examine.
+
 ## Smoke check in a VM
 
 Create a disposable VM with at least 4 GB RAM and a 30 GB virtual disk, attach
-the ISO, and boot it. The expected result is the Anaconda graphical interface.
+the ISO, and choose **Anaconda smoke test (no OS image)** from the boot menu.
+The expected result is the Anaconda graphical interface.
 The disk is present only so Anaconda can enumerate virtual storage; shut down
 after confirming the interface appears, without starting an installation.
 
-The ISO has not yet been built or validated. Test it in QEMU/KVM first, then
-VirtualBox, VMware, and Hyper-V.
+The ISO builds, but the graphical boot has not passed validation on Hyper-V.
+This branch is diagnostic and must not be used as an installer.
 
 ## Contents
 
@@ -39,3 +66,5 @@ VirtualBox, VMware, and Hyper-V.
 - `config/iso.yaml`: live ISO boot menu, labeled as a smoke test.
 - `config/anaconda.conf`: hides account creation, which is unrelated to this check.
 - `scripts/build-iso.sh`: local build script; it does not publish artifacts.
+- `scripts/cubelinux-smoke-debug`: captures one guarded startup attempt to a
+  separate diagnostic disk.

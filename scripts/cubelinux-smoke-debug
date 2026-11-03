@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# Capture one Anaconda startup attempt on a disk that survives a live ISO reboot.
+set -Eeuo pipefail
+
+if (( EUID != 0 )) || (( $# != 1 )); then
+    echo "Usage (as root): cubelinux-smoke-debug /mounted/diagnostic-disk" >&2
+    exit 2
+fi
+
+destination="$(realpath -- "$1")"
+if ! mountpoint -q -- "$destination"; then
+    echo "Refusing to start: $destination is not a separate mounted filesystem." >&2
+    exit 2
+fi
+
+fstype="$(findmnt -n -o FSTYPE --target "$destination")"
+case "$fstype" in
+    tmpfs|ramfs|overlay|squashfs|iso9660|rootfs)
+        echo "Refusing volatile or read-only filesystem: $fstype" >&2
+        exit 2 ;;
+esac
+if ! touch "$destination/.cubelinux-smoke-write-check"; then
+    echo "Refusing to start: $destination is not writable." >&2
+    exit 2
+fi
+rm -f -- "$destination/.cubelinux-smoke-write-check"
+
+run="$destination/cubelinux-smoke-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p -- "$run/logs"
+exec > >(tee -a "$run/monitor.log") 2>&1
+echo "Saving diagnostics to $run ($fstype)"
+
+capture() {
+    date -u '+Capture: %Y-%m-%dT%H:%M:%SZ' >> "$run/timeline.txt"
+    journalctl -b -o short-precise --no-pager > "$run/journal-snapshot.log" 2>&1 || true
+    dmesg --time-format=iso > "$run/dmesg-snapshot.log" 2>&1 || true
+    systemctl --no-pager --failed > "$run/failed-units.txt" 2>&1 || true
+    systemctl --no-pager list-jobs > "$run/jobs.txt" 2>&1 || true
+    systemctl --no-pager status anaconda.target anaconda-pre.service anaconda.service > "$run/anaconda-units.txt" 2>&1 || true
+    ps -eLfww > "$run/processes.txt" 2>&1 || true
+    for log in /tmp/*.log /tmp/anaconda-tb-* /var/log/anaconda/*.log; do
+        [[ -f "$log" ]] || continue
+        cp -f -- "$log" "$run/logs/" 2>/dev/null || true
+    done
+    sync -f "$run" || true
+}
+
+finish() {
+    trap - EXIT INT TERM
+    capture
+    if [[ -n "${journal_pid:-}" ]]; then
+        kill "$journal_pid" 2>/dev/null || true
+        wait "$journal_pid" 2>/dev/null || true
+    fi
+    if [[ -n "${kernel_pid:-}" ]]; then
+        kill "$kernel_pid" 2>/dev/null || true
+        wait "$kernel_pid" 2>/dev/null || true
+    fi
+    sync -f "$run" || true
+    echo "Diagnostics saved to $run"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+cat /proc/cmdline > "$run/kernel-cmdline.txt"
+cat /etc/os-release > "$run/os-release.txt"
+rpm -q anaconda anaconda-core anaconda-webui python3 systemd > "$run/packages.txt" 2>&1 || true
+systemctl cat anaconda.target anaconda-pre.service anaconda.service > "$run/anaconda-unit-files.txt" 2>&1 || true
+findmnt -R -o TARGET,SOURCE,FSTYPE,OPTIONS > "$run/mounts.txt" 2>&1 || true
+lsblk -f > "$run/block-devices.txt" 2>&1 || true
+
+# Block the ordinary systemd shutdown paths before starting the installer.
+# This does not prevent a kernel panic, direct reboot syscall, or host reset.
+systemctl mask --runtime reboot.target poweroff.target halt.target kexec.target
+for unit in reboot.target poweroff.target halt.target kexec.target; do
+    state="$(systemctl show --value -p LoadState "$unit")"
+    if [[ "$state" != masked ]]; then
+        echo "Refusing to start Anaconda: $unit state is $state, expected masked." >&2
+        exit 1
+    fi
+done
+systemctl show -p LoadState reboot.target poweroff.target halt.target kexec.target > "$run/shutdown-guards.txt"
+
+# Stream the journal onto the mounted disk, including anything after a snapshot.
+journalctl -b -f -o short-precise --no-pager > "$run/journal-follow.log" 2>&1 &
+journal_pid=$!
+dmesg --follow --time-format=iso > "$run/dmesg-follow.log" 2>&1 &
+kernel_pid=$!
+capture
+echo "Starting Anaconda once. The monitor will run for up to 30 minutes."
+systemctl --no-block start anaconda.target
+
+anaconda_pid() {
+    local pid candidate count=0
+    for pid in $(pgrep -f '/usr/sbin/anaconda' || true); do
+        [[ -r "/proc/$pid/cmdline" ]] || continue
+        candidate="$(tr '\0' '\n' < "/proc/$pid/cmdline" | grep -Fx '/usr/sbin/anaconda' || true)"
+        [[ -n "$candidate" ]] || continue
+        [[ "$(readlink -f "/proc/$pid/exe")" == */python3* ]] || continue
+        count=$((count + 1))
+        printf '%s\n' "$pid"
+    done
+    (( count == 1 ))
+}
+
+# Anaconda 44.30 registers SIGUSR2 to write Python thread stacks. Only signal
+# the exact installed entry point after verifying that handler is present.
+dump_threads() {
+    local pid
+    if ! grep -Fq 'signal.signal(signal.SIGUSR2, lambda signum, frame: anaconda.dumpState())' /usr/sbin/anaconda; then
+        echo "Skipping SIGUSR2: installed /usr/sbin/anaconda has no expected handler."
+        return
+    fi
+    if ! pid="$(anaconda_pid)"; then
+        echo "Skipping SIGUSR2: exactly one Anaconda Python process was not found."
+        return
+    fi
+    echo "Requesting thread dump from Anaconda PID $pid"
+    kill -USR2 "$pid" || true
+}
+
+payload_pid() {
+    local pid count=0
+    for pid in $(pgrep -f 'pyanaconda.modules.payloads' || true); do
+        [[ -r "/proc/$pid/cmdline" ]] || continue
+        tr '\0' '\n' < "/proc/$pid/cmdline" | grep -Fxq 'pyanaconda.modules.payloads' || continue
+        [[ "$(readlink -f "/proc/$pid/exe")" == */python3* ]] || continue
+        count=$((count + 1))
+        printf '%s\n' "$pid"
+    done
+    (( count == 1 ))
+}
+
+trace_payload() {
+    local pid
+    if ! pid="$(payload_pid)"; then
+        echo "Skipping payload strace: exactly one payload Python process was not found."
+        return
+    fi
+    echo "Tracing Anaconda payload PID $pid for 15 seconds"
+    timeout -s INT 15 strace -ff -ttT -s 128 -o "$run/strace-payload" -p "$pid" > "$run/strace-status.txt" 2>&1 || true
+}
+
+for (( sample=1; sample<=180; sample++ )); do
+    sleep 10
+    if (( sample == 6 || sample == 12 )); then
+        dump_threads
+    fi
+    if (( sample == 6 )); then
+        trace_payload
+    fi
+    capture
+done
+echo "30-minute capture window finished."
