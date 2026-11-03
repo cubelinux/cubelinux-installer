@@ -3,5 +3,5 @@ grub2:
   timeout: 5
   entries:
     - name: "Anaconda smoke test (no OS image)"
-      linux: "${kernelpath} ${root} inst.graphical console=tty0 selinux=0 rhgb quiet"
+      linux: "${kernelpath} ${root} inst.graphical inst.nokill console=tty0 selinux=0 rhgb quiet"
       initrd: "${initrdpath}"

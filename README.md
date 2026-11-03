@@ -1,5 +1,8 @@
 # Anaconda smoke-test ISO
 
+> [!WARNING]
+> **Experimental artifact disclaimer:** this ISO is an unvalidated development smoke test intended only to verify boot and Anaconda Web UI startup in a disposable virtual machine. It does not contain or install cubelinux, and it is not an installation medium. Do not initiate storage changes or installation actions. Use only in an environment where disk state can be discarded; behavior is not guaranteed and use is at your own risk.
+
 This project builds a small Fedora-based live ISO whose only purpose is to
 check that the live environment boots and Anaconda Web UI starts. It does not
 pull, embed, or install a CubeLinux image. No install kickstart or target image

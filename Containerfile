@@ -41,7 +41,9 @@ RUN echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/p
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \
     mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives && \
-    mv /etc/yum.repos.d /etc/anaconda.repos.d && \
+    rm -rf /etc/yum.repos.d /etc/anaconda.repos.d && \
+    mkdir -p /etc/systemd/system/anaconda-pre.service.d && \
+    printf '[Service]\nStandardInput=null\n' > /etc/systemd/system/anaconda-pre.service.d/override.conf && \
     systemctl mask bootloader-update.service && \
     ln -sfn /usr/lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
     rm -f /usr/lib/systemd/system-generators/systemd-gpt-auto-generator && \
