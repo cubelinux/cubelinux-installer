@@ -1,87 +1,38 @@
-# cubelinux-installer
+# Anaconda smoke-test ISO
 
-[![Build and publish installer ISO](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml/badge.svg)](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml)
+This project builds a small Fedora-based live ISO whose only purpose is to
+check that the live environment boots and Anaconda Web UI starts. It does not
+pull, embed, or install a CubeLinux image. No install kickstart or target image
+is configured.
 
-Build the bootable cubelinux installer ISO as a project separate from the
-cubelinux operating-system image. The ISO uses Fedora Anaconda Web UI, embeds
-the selected cubelinux bootc image, lets the user choose a target disk, and
-uses Anaconda's automatic partitioning on that disk. It does not create a user;
-the installed system should start Plasma Setup on first boot.
+This is a development smoke test, not a usable OS installer. When Anaconda
+appears, confirm the UI is running and shut down the VM. Do not proceed with
+any installation actions.
 
-## Current status
+## Build
 
-The build and upload workflow is in place. The installer image and ISO build
-path are based on Fedora's current `image-builder` and `bootc-generic-iso` workflow.
-The first ISO still needs to be built and exercised in a virtual machine before
-it is suitable for release. In particular, verify the Anaconda Web UI disk
-selection flow, that the embedded image installs without network access, that
-no account is requested, and that Plasma Setup starts after reboot.
-
-## Build prerequisites
-
-Use a Fedora 44 x86_64 build host with Podman, Skopeo, and `image-builder`
-installed.
-The build needs root privileges for image-builder's loop devices and mounts.
-The cubelinux image must be published in a registry accessible to the builder.
-
-Build using the exact image reference that the ISO should install:
+Build on a Fedora 44 x86_64 machine with Podman and `image-builder` installed.
+The build needs root privileges for image-builder's mounts and loop devices.
 
 ```sh
-sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main bash ./scripts/build-iso.sh
+sudo bash ./scripts/build-iso.sh
 ```
 
-The resulting ISO is written under `output/`. The source image is embedded in
-the installer image as an OCI archive, so installation should not need to
-download the OS image. The same registry reference is retained as the
-installed system's update origin.
+The ISO and its SHA-256 checksum are written to `output/`.
 
-## Project layout
+## Smoke check in a VM
 
-```text
-cubelinux-installer/
-|-- config/
-|   |-- anaconda.conf           # Hide account creation page
-|   |-- branding.css            # Anaconda Web UI branding
-|   `-- iso.yaml                 # ISO boot menu and media label
-|-- .github/workflows/
-|   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
-|-- scripts/
-|   `-- build-iso.sh             # Build installer image and ISO
-|-- .gitignore
-|-- Containerfile                # Anaconda Web UI installer environment
-`-- README.md
-```
+Create a disposable VM with at least 4 GB RAM and a 30 GB virtual disk, attach
+the ISO, and boot it. The expected result is the Anaconda graphical interface.
+The disk is present only so Anaconda can enumerate virtual storage; shut down
+after confirming the interface appears, without starting an installation.
 
-The ISO is a release artifact, separate from the bootc image release. The
-GitHub Actions workflow builds on every push to `main` and uploads a separate
-ISO, checksum, and source commit record to the SourceForge File Release
-System. The ISO filename contains the full Git commit hash, so each upload is
-retained as its own file and uses additional SourceForge storage. The build
-prunes container images and caches when finished, removes the Fedora builder
-image before upload, and deletes the local ISO after a successful upload.
+The ISO has not yet been built or validated. Test it in QEMU/KVM first, then
+VirtualBox, VMware, and Hyper-V.
 
-Configure these repository secrets before enabling uploads:
+## Contents
 
-- `SOURCEFORGE_USER`: your SourceForge account name with release upload rights
-- `SOURCEFORGE_SSH_KEY`: the private SSH key registered with that account
-- `SOURCEFORGE_SSH_KEY_PASSPHRASE`: the passphrase for that private key
-
-Set the `SOURCEFORGE_PROJECT` repository variable to the SourceForge project
-URL slug. It defaults to `vibolvireak`.
-
-Optionally set the `CUBELINUX_IMAGE_REF` repository variable to choose a
-different published bootc image. For a private GHCR package, also configure
-`GHCR_USERNAME` and `GHCR_TOKEN` secrets with pull access. The default is
-`ghcr.io/cubelinux/cubelinux:main`.
-
-## Important behavior
-
-- The ISO is destructive to the selected target disk; make that clear in the
-  installer flow and release notes.
-- The installer must not collect or create user account information.
-- Anaconda's account page is hidden; verify this in the built Web UI.
-- The selected cubelinux payload is embedded as an OCI archive and installed
-  from that local archive, while its registry reference remains the update
-  origin for the installed system.
-- Do not publish an ISO until the installed system has been confirmed to boot
-  into the existing Plasma Setup account flow.
+- `Containerfile`: Fedora live environment and Anaconda runtime.
+- `config/iso.yaml`: live ISO boot menu, labeled as a smoke test.
+- `config/anaconda.conf`: hides account creation, which is unrelated to this check.
+- `scripts/build-iso.sh`: local build script; it does not publish artifacts.

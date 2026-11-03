@@ -1,9 +1,6 @@
-ARG FEDORA_BOOTC_IMAGE=quay.io/fedora/fedora-bootc:44
-FROM ${FEDORA_BOOTC_IMAGE}
+FROM quay.io/fedora/fedora-bootc:44
 
-ARG CUBELINUX_IMAGE_REF
-RUN test -n "${CUBELINUX_IMAGE_REF}" && \
-    dnf -y install \
+RUN dnf -y install \
         anaconda \
         anaconda-webui \
         anaconda-install-img-deps \
@@ -19,47 +16,37 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         google-noto-sans-cjk-fonts \
         xorrisofs \
         squashfs-tools \
+        isomd5sum \
         grub2-common \
         grub2-pc-modules \
         podman \
         fuse-overlayfs \
         python3 \
-        && dnf clean all
+    && dnf clean all
 
-# The generic ISO boots the installer from its embedded LiveOS/squashfs.img.
-# Include the live-root module so dracut mounts that filesystem at /sysroot.
-RUN mkdir -p "$(realpath /root)" && \
+# Build a generic initramfs that can boot the live ISO on varied hardware.
+RUN install -d /root && \
     kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
     test -n "$kernel" && \
     DRACUT_NO_XATTR=1 dracut --force --no-hostonly \
         --add "anaconda dmsquash-live" \
         "/usr/lib/modules/${kernel}/initramfs.img" "$kernel"
 
-# Keep Podman's storage usable if Anaconda or bootc needs it in the live system.
-RUN mkdir -p /etc/containers && \
-    printf '[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "/usr/bin/fuse-overlayfs"\n' \
-        > /etc/containers/storage.conf
-
-RUN mkdir -p /usr/local/sbin
-
-RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
-
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
-COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
-COPY config/branding.css /usr/share/cockpit/branding/fedora/branding.css
-COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
+COPY config/anaconda.conf /etc/anaconda/conf.d/10-smoke-test.conf
 
-RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload --target-imgref=%s\n' \
-        "${CUBELINUX_IMAGE_REF}" \
-        > /usr/share/anaconda/interactive-defaults.ks && \
-    echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
+# Start Anaconda in the live session, but do not configure any install payload
+# or kickstart command. Keep the test environment independent of DNF repos.
+RUN echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \
-    systemctl mask bootloader-update.service && \
     mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives && \
     mv /etc/yum.repos.d /etc/anaconda.repos.d && \
-    ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
+    systemctl mask bootloader-update.service && \
+    ln -sfn /usr/lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
     rm -f /usr/lib/systemd/system-generators/systemd-gpt-auto-generator && \
     ln -sfn /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service && \
     mkdir -p /usr/lib/systemd/logind.conf.d && \
-    printf '[Login]\nReserveVT=2\n' > /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
+    printf '[Login]\nReserveVT=2\n' > /usr/lib/systemd/logind.conf.d/anaconda-shell.conf && \
+    mkdir -p /boot/efi && \
+    cp -ra /usr/lib/efi/*/*/EFI /boot/efi
