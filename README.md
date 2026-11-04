@@ -3,19 +3,23 @@
 [![Build and publish installer ISO](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml/badge.svg)](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml)
 
 Build the bootable cubelinux installer ISO as a project separate from the
-cubelinux operating-system image. The ISO uses Fedora Anaconda Web UI, embeds
-the selected cubelinux bootc image, lets the user choose a target disk, and
+cubelinux operating-system image. The ISO uses Fedora Anaconda's GTK interface,
+embeds the selected cubelinux bootc image, lets the user choose a target disk, and
 uses Anaconda's automatic partitioning on that disk. It does not create a user;
 the installed system should start Plasma Setup on first boot.
 
 ## Current status
 
-The build and upload workflow is in place. The installer image and ISO build
-path are based on Fedora's current `image-builder` and `bootc-generic-iso` workflow.
-The first ISO still needs to be built and exercised in a virtual machine before
-it is suitable for release. In particular, verify the Anaconda Web UI disk
-selection flow, that the embedded image installs without network access, that
-no account is requested, and that Plasma Setup starts after reboot.
+The Anaconda GTK interface was confirmed to start in a Fedora 44 test image.
+The production installer image and ISO still need a full build and end-to-end
+test in a disposable virtual machine before release. Verify disk selection, that
+the embedded image installs without network access, that account creation is
+skipped, and that Plasma Setup starts after reboot.
+
+The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
+required package dependencies while skipping optional weak dependencies to keep
+the ISO smaller. The host workflow installs the current Fedora 44
+`image-builder` package for each run.
 
 ## Build prerequisites
 
@@ -40,15 +44,14 @@ installed system's update origin.
 ```text
 cubelinux-installer/
 |-- config/
-|   |-- anaconda.conf           # Hide account creation page
-|   |-- branding.css            # Anaconda Web UI branding
+|   |-- anaconda.conf           # Hide the GTK account spoke
 |   `-- iso.yaml                 # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
 |-- scripts/
 |   `-- build-iso.sh             # Build installer image and ISO
 |-- .gitignore
-|-- Containerfile                # Anaconda Web UI installer environment
+|-- Containerfile                # Anaconda GTK installer environment
 `-- README.md
 ```
 
@@ -79,7 +82,7 @@ different published bootc image. For a private GHCR package, also configure
 - The ISO is destructive to the selected target disk; make that clear in the
   installer flow and release notes.
 - The installer must not collect or create user account information.
-- Anaconda's account page is hidden; verify this in the built Web UI.
+- Anaconda's GTK account spoke is hidden; verify this in the built installer.
 - The selected cubelinux payload is embedded as an OCI archive and installed
   from that local archive, while its registry reference remains the update
   origin for the installed system.

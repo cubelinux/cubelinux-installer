@@ -2,10 +2,12 @@ ARG FEDORA_BOOTC_IMAGE=quay.io/fedora/fedora-bootc:44
 FROM ${FEDORA_BOOTC_IMAGE}
 
 ARG CUBELINUX_IMAGE_REF
+# Anaconda detects WebUI from its Cockpit assets and prefers it when present.
+# Exclude WebUI so the installed GTK interface is selected. Avoid adding
+# optional weak dependencies to the live installer image.
 RUN test -n "${CUBELINUX_IMAGE_REF}" && \
-    dnf -y install \
+    dnf -y --setopt=install_weak_deps=False --exclude=anaconda-webui install \
         anaconda \
-        anaconda-webui \
         anaconda-install-img-deps \
         anaconda-dracut \
         dracut-live \
@@ -25,6 +27,12 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         fuse-overlayfs \
         python3 \
         && dnf clean all
+
+RUN rpm -q anaconda anaconda-core anaconda-gui anaconda-tui && \
+    if rpm -q --quiet anaconda-webui || test -e /usr/share/cockpit/anaconda-webui; then \
+        echo 'GTK installer image unexpectedly contains Anaconda WebUI' >&2; \
+        exit 1; \
+    fi
 
 # The generic ISO boots the installer from its embedded LiveOS/squashfs.img.
 # Include the live-root module so dracut mounts that filesystem at /sysroot.
@@ -46,7 +54,6 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
-COPY config/branding.css /usr/share/cockpit/branding/fedora/branding.css
 COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 
 RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload --target-imgref=%s\n' \
@@ -56,6 +63,8 @@ RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.t
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \
     systemctl mask bootloader-update.service && \
+    mkdir -p /etc/systemd/system/anaconda-pre.service.d && \
+    printf '[Service]\nStandardInput=null\n' > /etc/systemd/system/anaconda-pre.service.d/override.conf && \
     mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives && \
     mv /etc/yum.repos.d /etc/anaconda.repos.d && \
     ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
