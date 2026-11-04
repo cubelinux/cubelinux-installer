@@ -1,10 +1,10 @@
-label: "CUBELINUX-ANACONDA-SMOKE"
+label: "CUBELINUX-ANACONDA-GTK-SMOKE"
 grub2:
   timeout: 5
   entries:
-    - name: "Diagnostic shell (start Anaconda after log disk is mounted)"
+    - name: "Diagnostic shell (GTK test; mount log disk first)"
       linux: "${kernelpath} ${root} systemd.unit=multi-user.target inst.graphical inst.nokill console=tty0 selinux=0"
       initrd: "${initrdpath}"
-    - name: "Anaconda smoke test (no OS image)"
+    - name: "Anaconda GTK smoke test (no OS image)"
       linux: "${kernelpath} ${root} inst.graphical inst.nokill console=tty0 selinux=0 rhgb quiet"
       initrd: "${initrdpath}"

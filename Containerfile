@@ -1,8 +1,11 @@
 FROM quay.io/fedora/fedora-bootc:44
 
-RUN dnf -y install \
-        anaconda \
-        anaconda-webui \
+# Select GTK explicitly: Fedora's anaconda metapackage may select WebUI.
+# Exclude WebUI so dependency changes fail the build instead of changing the UI.
+RUN dnf -y --exclude=anaconda-webui install \
+        anaconda-core \
+        anaconda-gui \
+        anaconda-tui \
         anaconda-install-img-deps \
         anaconda-dracut \
         dracut-live \
@@ -26,6 +29,14 @@ RUN dnf -y install \
         python3 \
     && dnf clean all
 
+# Anaconda selects WebUI when its Cockpit asset directory exists, even with GTK
+# installed. Check both the package selection and that runtime selector.
+RUN rpm -q anaconda-core anaconda-gui anaconda-tui && \
+    if rpm -q --quiet anaconda-webui || test -e /usr/share/cockpit/anaconda-webui; then \
+        echo 'GTK smoke image unexpectedly contains Anaconda WebUI' >&2; \
+        exit 1; \
+    fi
+
 # Build a generic initramfs that can boot the live ISO on varied hardware.
 RUN mkdir -p "$(realpath /root)" && \
     kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
@@ -35,7 +46,6 @@ RUN mkdir -p "$(realpath /root)" && \
         "/usr/lib/modules/${kernel}/initramfs.img" "$kernel"
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
-COPY config/anaconda.conf /etc/anaconda/conf.d/10-smoke-test.conf
 COPY scripts/cubelinux-smoke-debug /usr/local/bin/cubelinux-smoke-debug
 RUN chmod 0755 /usr/local/bin/cubelinux-smoke-debug
 

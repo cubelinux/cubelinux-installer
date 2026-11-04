@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE_REF="localhost/cubelinux-anaconda-smoke:local"
+IMAGE_REF="localhost/cubelinux-anaconda-gtk-smoke:local"
 BUILD_ID="${GITHUB_SHA:-$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || printf 'local')}"
-OUTPUT_NAME="cubelinux-anaconda-smoke-${BUILD_ID}"
+OUTPUT_NAME="cubelinux-anaconda-gtk-smoke-${BUILD_ID}"
 OUTPUT_DIR="$ROOT/output"
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -24,6 +24,7 @@ podman build --tag "$IMAGE_REF" --file "$ROOT/Containerfile" "$ROOT"
 
 {
     printf 'Built at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'Installer interface: Anaconda GTK (anaconda-gui)\n'
     printf 'Source revision: %s\n' "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD 2>/dev/null || printf unknown)"
     printf 'Source changes:\n'
     git -c safe.directory="$ROOT" -C "$ROOT" status --short 2>/dev/null || true

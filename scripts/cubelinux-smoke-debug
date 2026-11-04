@@ -65,7 +65,7 @@ trap 'exit 143' TERM
 
 cat /proc/cmdline > "$run/kernel-cmdline.txt"
 cat /etc/os-release > "$run/os-release.txt"
-rpm -q anaconda anaconda-core anaconda-webui python3 systemd > "$run/packages.txt" 2>&1 || true
+rpm -q anaconda-core anaconda-gui anaconda-tui anaconda-webui python3 systemd > "$run/packages.txt" 2>&1 || true
 systemctl cat anaconda.target anaconda-pre.service anaconda.service > "$run/anaconda-unit-files.txt" 2>&1 || true
 findmnt -R -o TARGET,SOURCE,FSTYPE,OPTIONS > "$run/mounts.txt" 2>&1 || true
 lsblk -f > "$run/block-devices.txt" 2>&1 || true
