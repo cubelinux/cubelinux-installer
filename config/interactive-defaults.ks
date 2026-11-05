@@ -4,10 +4,11 @@ bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload -
 set -eu
 
 target_root=/mnt/sysroot
-scratch_dir="$target_root/.cubelinux-installer-scratch"
+physical_root=/mnt/sysimage
+scratch_dir="$physical_root/.cubelinux-installer-scratch"
 
-if ! mountpoint -q "$target_root"; then
-    echo "Anaconda target root is not mounted at $target_root" >&2
+if ! mountpoint -q "$target_root" || ! mountpoint -q "$physical_root"; then
+    echo "Anaconda target roots are not mounted at $target_root and $physical_root" >&2
     exit 1
 fi
 
@@ -21,5 +22,5 @@ df -h /var/tmp
 set -eu
 mountpoint -q /var/tmp
 umount /var/tmp
-rm -rf /mnt/sysroot/.cubelinux-installer-scratch
+rm -rf /mnt/sysimage/.cubelinux-installer-scratch
 %end
