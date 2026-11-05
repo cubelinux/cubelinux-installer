@@ -75,3 +75,10 @@ RUN sed "s|__CUBELINUX_IMAGE_REF__|${CUBELINUX_IMAGE_REF}|g" \
     ln -sfn /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service && \
     mkdir -p /usr/lib/systemd/logind.conf.d && \
     printf '[Login]\nReserveVT=2\n' > /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
+
+# Keep the installed image's registry reference as its update origin, but do
+# not require network access during installation: the source image is embedded
+# in the ISO. bootc otherwise verifies the update image can be fetched.
+RUN cp -L /usr/bin/bootc /usr/libexec/bootc-original
+COPY scripts/bootc-offline /usr/bin/bootc
+RUN chmod 0755 /usr/bin/bootc

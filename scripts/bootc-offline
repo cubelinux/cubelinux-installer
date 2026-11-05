@@ -1,0 +1,9 @@
+#!/bin/bash
+set -eu
+
+if [[ "${1-}" == "install" && "${2-}" == "to-filesystem" ]]; then
+    shift 2
+    exec /usr/libexec/bootc-original install to-filesystem --skip-fetch-check "$@"
+fi
+
+exec /usr/libexec/bootc-original "$@"

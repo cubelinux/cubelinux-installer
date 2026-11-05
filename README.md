@@ -35,9 +35,10 @@ sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main bash ./scripts/build-i
 ```
 
 The resulting ISO is written under `output/`. The source image is embedded in
-the installer image as an OCI archive, so installation should not need to
-download the OS image. The same registry reference is retained as the
-installed system's update origin.
+the installer image as an OCI archive, so installation does not need to
+download the OS image. The installer skips bootc's update-origin fetch check
+during deployment; the same registry reference is retained as the installed
+system's update origin for later use.
 
 During installation, Anaconda binds a temporary directory on the selected
 target filesystem over the live installer's `/var/tmp`. Bootc uses this path
