@@ -34,6 +34,14 @@ Build using the exact image reference that the ISO should install:
 sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main bash ./scripts/build-iso.sh
 ```
 
+The script reuses this image from rootful Podman's local store on later builds.
+To refresh a mutable tag such as `:main`, set `CUBELINUX_REFRESH_IMAGE=1` for
+that build:
+
+```sh
+sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main CUBELINUX_REFRESH_IMAGE=1 bash ./scripts/build-iso.sh
+```
+
 The resulting ISO is written under `output/`. The source image is embedded in
 the installer image as an OCI archive, so installation does not need to
 download the OS image. The installer skips bootc's update-origin fetch check

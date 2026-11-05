@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_REF="${CUBELINUX_IMAGE_REF:-}"
+REFRESH_IMAGE="${CUBELINUX_REFRESH_IMAGE:-0}"
 COMMIT_REF="${GITHUB_SHA:-local}"
 INSTALLER_REF="localhost/cubelinux-installer:local"
 PAYLOAD_ARCHIVE="$ROOT/output/cubelinux-payload.oci.tar"
@@ -12,7 +13,7 @@ cleanup() {
     if [[ "${CUBELINUX_CI_PRUNE:-}" == "1" ]]; then
         podman system prune --all --force --volumes >/dev/null 2>&1 || true
     else
-        podman image rm --force "$INSTALLER_REF" "$IMAGE_REF" >/dev/null 2>&1 || true
+        podman image rm --force "$INSTALLER_REF" >/dev/null 2>&1 || true
     fi
 }
 
@@ -35,11 +36,20 @@ rm -f "$ROOT"/output/cubelinux-installer-*.iso \
     "$ROOT"/output/cubelinux-installer-build.txt \
     "$PAYLOAD_ARCHIVE"
 
-podman pull "$IMAGE_REF"
+if [[ "$REFRESH_IMAGE" == "1" ]] || ! podman image exists "$IMAGE_REF"; then
+    podman pull "$IMAGE_REF"
+else
+    printf 'Using cached image %s (set CUBELINUX_REFRESH_IMAGE=1 to pull it again)\n' "$IMAGE_REF"
+fi
 skopeo copy "containers-storage:$IMAGE_REF" "oci-archive:$PAYLOAD_ARCHIVE:payload"
-# The OCI archive is now the build input; release the pulled image before the
-# installer build so its layers do not compete for runner storage.
-podman image rm --force "$IMAGE_REF" >/dev/null
+if [[ "${CUBELINUX_CI_PRUNE:-}" == "1" ]]; then
+    # CI has no persistent image cache, so free the source layers before the
+    # installer build competes for runner storage.
+    podman image rm --force "$IMAGE_REF" >/dev/null
+else
+    # Keep the source image in rootful Podman's local store for the next build.
+    printf 'Keeping %s in rootful Podman storage for the next build\n' "$IMAGE_REF"
+fi
 df -h /var/tmp /var/lib/containers "$ROOT/output"
 podman build \
     --build-arg "CUBELINUX_IMAGE_REF=$IMAGE_REF" \
