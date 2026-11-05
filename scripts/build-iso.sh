@@ -55,13 +55,17 @@ image-builder build \
     --bootc-default-fs ext4 \
     bootc-generic-iso
 
-ISO_PATH="$ROOT/output/cubelinux-installer-${COMMIT_REF}.iso"
+ISO_NAME="cubelinux-installer-${COMMIT_REF}.iso"
+ISO_PATH="$ROOT/output/$ISO_NAME"
 if [[ ! -f "$ISO_PATH" ]]; then
     echo "image-builder completed without producing $ISO_PATH" >&2
     exit 1
 fi
 
-sha256sum "$ISO_PATH" > "$ISO_PATH.sha256"
+(
+    cd "$ROOT/output"
+    sha256sum "$ISO_NAME" > "$ISO_NAME.sha256"
+)
 printf 'commit=%s\nimage=%s\n' \
     "$COMMIT_REF" "$IMAGE_REF" > "$ROOT/output/cubelinux-installer-build.txt"
 printf 'Built %s\n' "$ISO_PATH"
