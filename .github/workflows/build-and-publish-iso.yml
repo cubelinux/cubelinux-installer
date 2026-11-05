@@ -23,6 +23,11 @@ jobs:
       - name: Check out installer project
         uses: actions/checkout@v4
 
+      - name: Reclaim runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+
       - name: Check publishing configuration
         env:
           SOURCEFORGE_USER: ${{ secrets.SOURCEFORGE_USER }}
@@ -49,8 +54,12 @@ jobs:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
+          # Podman writes large temporary layer blobs under /var/tmp.
+          # Keep its graphroot off the outer Docker container's overlay too.
           docker run --rm --privileged \
             --mount type=volume,dst=/run/osbuild \
+            --mount type=volume,dst=/var/tmp \
+            --mount type=volume,dst=/var/lib/containers \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env CUBELINUX_IMAGE_REF \
@@ -66,6 +75,8 @@ jobs:
               printf "[storage]\ndriver = \"overlay\"\n\n[storage.options.overlay]\nmount_program = \"/usr/bin/fuse-overlayfs\"\n" \
                 > /etc/containers/storage.conf
               export CONTAINERS_STORAGE_CONF=/etc/containers/storage.conf
+              trap "df -h / /var/tmp /run/osbuild /var/lib/containers || true" EXIT
+              df -h / /var/tmp /run/osbuild /var/lib/containers
               if [[ -n "${GHCR_TOKEN:-}" ]]; then
                 printf "%s" "$GHCR_TOKEN" | podman login ghcr.io \
                   --username "$GHCR_USERNAME" --password-stdin

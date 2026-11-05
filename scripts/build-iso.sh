@@ -37,11 +37,16 @@ rm -f "$ROOT"/output/cubelinux-installer-*.iso \
 
 podman pull "$IMAGE_REF"
 skopeo copy "containers-storage:$IMAGE_REF" "oci-archive:$PAYLOAD_ARCHIVE:payload"
+# The OCI archive is now the build input; release the pulled image before the
+# installer build so its layers do not compete for runner storage.
+podman image rm --force "$IMAGE_REF" >/dev/null
+df -h /var/tmp /var/lib/containers "$ROOT/output"
 podman build \
     --build-arg "CUBELINUX_IMAGE_REF=$IMAGE_REF" \
     --tag "$INSTALLER_REF" \
     --file Containerfile \
     .
+rm -f "$PAYLOAD_ARCHIVE"
 
 image-builder build \
     --output-dir "$ROOT/output" \

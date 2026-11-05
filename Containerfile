@@ -54,11 +54,14 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
+COPY config/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
 COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 
-RUN printf 'bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload --target-imgref=%s\n' \
-        "${CUBELINUX_IMAGE_REF}" \
-        > /usr/share/anaconda/interactive-defaults.ks && \
+RUN sed "s|__CUBELINUX_IMAGE_REF__|${CUBELINUX_IMAGE_REF}|g" \
+        /usr/share/anaconda/interactive-defaults.ks \
+        > /usr/share/anaconda/interactive-defaults.ks.tmp && \
+    mv /usr/share/anaconda/interactive-defaults.ks.tmp \
+        /usr/share/anaconda/interactive-defaults.ks && \
     echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \

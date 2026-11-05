@@ -39,13 +39,21 @@ the installer image as an OCI archive, so installation should not need to
 download the OS image. The same registry reference is retained as the
 installed system's update origin.
 
+During installation, Anaconda binds a temporary directory on the selected
+target filesystem over the live installer's `/var/tmp`. Bootc uses this path
+while importing the embedded image, avoiding the small RAM-backed scratch area
+in the live ISO. The target filesystem therefore needs free space for the
+temporary import in addition to the installed system. The temporary directory
+is removed after a successful install.
+
 ## Project layout
 
 ```text
 cubelinux-installer/
 |-- config/
 |   |-- anaconda.conf           # Hide the GTK account spoke
-|   `-- iso.yaml                 # ISO boot menu and media label
+|   |-- interactive-defaults.ks # Bootc install and disk-backed scratch setup
+|   `-- iso.yaml                # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
 |-- scripts/
