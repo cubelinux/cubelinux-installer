@@ -55,6 +55,7 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
 COPY config/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
+COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 
 RUN sed "s|__CUBELINUX_IMAGE_REF__|${CUBELINUX_IMAGE_REF}|g" \
         /usr/share/anaconda/interactive-defaults.ks \

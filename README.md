@@ -100,8 +100,8 @@ different published bootc image. For a private GHCR package, also configure
   installer flow and release notes.
 - The installer must not collect or create user account information.
 - Anaconda's GTK account spoke is hidden; verify this in the built installer.
-- The selected cubelinux payload is embedded in the ISO's container storage
-  and installed from the local image, while its registry reference remains the
+- The selected cubelinux payload is embedded as an OCI archive in the ISO and
+  installed from that local archive, while its registry reference remains the
   update origin for the installed system.
 - Do not publish an ISO until the installed system has been confirmed to boot
   into the existing Plasma Setup account flow.
