@@ -26,13 +26,25 @@ if "# cubelinux: bootc activity status" in source:
 required_fragments = (
     "class DeployBootcTask(Task)",
     "def run(self):",
-    "for line in execReadlines(bootc_cmd, bootc_args):",
 )
 missing = [fragment for fragment in required_fragments if fragment not in source]
 if missing:
     sys.exit(
         "Anaconda bootc installation module layout changed; missing: "
         + ", ".join(missing)
+    )
+
+# Fedora 44's Anaconda passes the executable as a string literal, while newer
+# upstream versions use a local variable. The status wrapper works with either
+# form because it wraps DeployBootcTask.run instead of rewriting this loop.
+bootc_runner_fragments = (
+    'for line in execReadlines("bootc", bootc_args):',
+    "for line in execReadlines(bootc_cmd, bootc_args):",
+)
+if not any(fragment in source for fragment in bootc_runner_fragments):
+    sys.exit(
+        "Anaconda bootc installation module layout changed; "
+        "could not find the bootc output reader"
     )
 
 source += r'''
