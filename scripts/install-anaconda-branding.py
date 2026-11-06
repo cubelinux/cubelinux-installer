@@ -16,10 +16,10 @@ LOGO_URL = (
     "https://pub-eb590fbfc3074776ad4199c13b93d722.r2.dev/"
     "logo/primary-on-transparent.svg"
 )
-LOGO_PATH = Path("/usr/share/cubelinux/branding/primary-on-transparent.svg")
+LOGO_PNG_PATH = Path("/usr/share/cubelinux/branding/primary-logo.png")
 
 
-def download_logo() -> None:
+def download_logo(destination: Path) -> None:
     request = Request(LOGO_URL, headers={"User-Agent": "cubelinux-installer-build"})
     with urlopen(request, timeout=30) as response:
         logo = response.read(5_000_001)
@@ -27,8 +27,22 @@ def download_logo() -> None:
     if b"<svg" not in logo[:4096] or len(logo) > 5_000_000:
         sys.exit("The Cubelinux logo URL did not return a valid SVG")
 
-    LOGO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    LOGO_PATH.write_bytes(logo)
+    destination.write_bytes(logo)
+
+
+def convert_primary_logo(svg_path: Path) -> None:
+    """Rasterize the downloaded artwork once as a high-resolution PNG."""
+    LOGO_PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "/usr/bin/rsvg-convert",
+            "--format=png",
+            "--width=1024",
+            f"--output={LOGO_PNG_PATH}",
+            str(svg_path),
+        ],
+        check=True,
+    )
 
 
 def png_dimensions(path: Path) -> tuple[int, int]:
@@ -45,7 +59,7 @@ def png_dimensions(path: Path) -> tuple[int, int]:
     return struct.unpack(">II", header[16:24])
 
 
-def render_logo(target: Path) -> None:
+def render_logo(svg_path: Path, target: Path) -> None:
     width, height = png_dimensions(target)
     with tempfile.NamedTemporaryFile(
         prefix=f".{target.name}.", suffix=".png", dir=target.parent, delete=False
@@ -60,7 +74,7 @@ def render_logo(target: Path) -> None:
                 f"--width={width}",
                 f"--height={height}",
                 f"--output={temporary_path}",
-                str(LOGO_PATH),
+                str(svg_path),
             ],
             check=True,
         )
@@ -69,8 +83,10 @@ def render_logo(target: Path) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def install_logo_artwork() -> None:
-    # Render into the existing image dimensions to preserve Anaconda's layout.
+def install_logo_artwork(svg_path: Path) -> None:
+    # Use a 1024px transparent PNG for the sidebar, scaled by GTK CSS to fit.
+    # Other legacy raster slots retain their expected canvas sizes, with the
+    # vector's aspect ratio preserved inside those PNG canvases.
     image_patterns = (
         "/usr/share/anaconda/pixmaps/anaconda_header.png",
         "/usr/share/anaconda/pixmaps/sidebar-logo.png",
@@ -100,14 +116,18 @@ def install_logo_artwork() -> None:
         missing = ", ".join(str(path) for path in sorted(required - set(targets)))
         sys.exit(f"Anaconda branding images are missing: {missing}")
 
+    sidebar_logo = Path("/usr/share/anaconda/pixmaps/sidebar-logo.png")
     for target in targets:
-        render_logo(target)
+        if target == sidebar_logo:
+            target.write_bytes(LOGO_PNG_PATH.read_bytes())
+        else:
+            render_logo(svg_path, target)
 
-    # Replace the scalable Fedora distribution mark without changing
-    # Anaconda's own application icon or its desktop/application identifier.
-    for path in (Path("/usr/share/icons/hicolor/scalable/apps/fedora-logo-icon.svg"),):
-        if path.is_file():
-            path.write_bytes(LOGO_PATH.read_bytes())
+    # The icon theme prefers scalable artwork; remove the Fedora version so it
+    # falls back to the Cubelinux PNG sizes rendered above.
+    Path("/usr/share/icons/hicolor/scalable/apps/fedora-logo-icon.svg").unlink(
+        missing_ok=True
+    )
 
 
 def set_installer_product_name() -> None:
@@ -119,8 +139,11 @@ def set_installer_product_name() -> None:
 
 
 def main() -> None:
-    download_logo()
-    install_logo_artwork()
+    with tempfile.TemporaryDirectory(prefix="cubelinux-branding-") as temporary_dir:
+        svg_path = Path(temporary_dir) / "primary-logo.svg"
+        download_logo(svg_path)
+        convert_primary_logo(svg_path)
+        install_logo_artwork(svg_path)
     set_installer_product_name()
 
 

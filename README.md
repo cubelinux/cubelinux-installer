@@ -20,10 +20,11 @@ skipped, and that Plasma Setup starts after reboot.
 The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
 required package dependencies while skipping optional weak dependencies to keep
 the ISO smaller. During the container build, the installer downloads the
-Cubelinux primary SVG and applies it to Anaconda's logo artwork. The installer
-product label and GTK stylesheet use Cubelinux branding; Fedora OS identity
-metadata remains intact for platform behavior. The host workflow installs the
-current Fedora 44 `image-builder` package for each run.
+Cubelinux primary SVG and rasterizes it into a transparent, 1024-pixel-wide PNG.
+The GTK stylesheet scales the sidebar logo to fit. The installer product label
+and stylesheet use Cubelinux branding; Fedora OS identity metadata remains
+intact for platform behavior. The host workflow installs the current Fedora 44
+`image-builder` package for each run.
 
 ## Build prerequisites
 
