@@ -23,7 +23,7 @@ the ISO smaller. The host workflow installs the current Fedora 44
 
 ## Build prerequisites
 
-Use a Fedora 44 x86_64 build host with Podman, Skopeo, and `image-builder`
+Use a Fedora 44 x86_64 build host with rootful Podman and `image-builder`
 installed.
 The build needs root privileges for image-builder's loop devices and mounts.
 The cubelinux image must be published in a registry accessible to the builder.
@@ -42,11 +42,11 @@ that build:
 sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main CUBELINUX_REFRESH_IMAGE=1 bash ./scripts/build-iso.sh
 ```
 
-The resulting ISO is written under `output/`. The source image is embedded in
-the installer image as an OCI archive, so installation does not need to
-download the OS image. The installer skips bootc's update-origin fetch check
-during deployment; the same registry reference is retained as the installed
-system's update origin for later use.
+The resulting ISO is written under `output/`. Image Builder embeds the source
+image from Podman storage in the ISO's container storage, so installation does
+not need to download the OS image. The installer skips bootc's update-origin
+fetch check during deployment; the same registry reference is retained as the
+installed system's update origin for later use.
 
 During installation, Anaconda binds a temporary directory on the selected
 target filesystem over the live installer's `/var/tmp`. Bootc uses this path
@@ -100,8 +100,8 @@ different published bootc image. For a private GHCR package, also configure
   installer flow and release notes.
 - The installer must not collect or create user account information.
 - Anaconda's GTK account spoke is hidden; verify this in the built installer.
-- The selected cubelinux payload is embedded as an OCI archive and installed
-  from that local archive, while its registry reference remains the update
-  origin for the installed system.
+- The selected cubelinux payload is embedded in the ISO's container storage
+  and installed from the local image, while its registry reference remains the
+  update origin for the installed system.
 - Do not publish an ISO until the installed system has been confirmed to boot
   into the existing Plasma Setup account flow.

@@ -1,4 +1,4 @@
-bootc --source-imgref=oci-archive:/usr/share/cubelinux/payload.oci.tar:payload --target-imgref=__CUBELINUX_IMAGE_REF__
+bootc --source-imgref=containers-storage:__CUBELINUX_IMAGE_REF__ --target-imgref=__CUBELINUX_IMAGE_REF__
 
 %pre-install --erroronfail --log=/tmp/cubelinux-scratch-pre-install.log
 set -eu
