@@ -3,10 +3,10 @@
 [![Build and publish installer ISO](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml/badge.svg)](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml)
 
 Build the bootable cubelinux installer ISO as a project separate from the
-cubelinux operating-system image. The ISO uses Fedora Anaconda's GTK interface,
-embeds the selected cubelinux bootc image, lets the user choose one target disk,
-and uses Anaconda's automatic partitioning on that disk. Manual partitioning is
-hidden. It does not create a user;
+cubelinux operating-system image. The ISO uses Fedora Anaconda's GTK interface
+with Cubelinux branding. It embeds the selected cubelinux bootc image, lets the
+user choose one target disk, and uses Anaconda's automatic partitioning on it.
+Manual partitioning is hidden. It does not create a user;
 the installed system should start Plasma Setup on first boot.
 
 ## Current status
@@ -19,8 +19,11 @@ skipped, and that Plasma Setup starts after reboot.
 
 The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
 required package dependencies while skipping optional weak dependencies to keep
-the ISO smaller. The host workflow installs the current Fedora 44
-`image-builder` package for each run.
+the ISO smaller. During the container build, the installer downloads the
+Cubelinux primary SVG and applies it to Anaconda's logo artwork. The installer
+product label and GTK stylesheet use Cubelinux branding; Fedora OS identity
+metadata remains intact for platform behavior. The host workflow installs the
+current Fedora 44 `image-builder` package for each run.
 
 ## Build prerequisites
 
@@ -58,19 +61,27 @@ installed system. The scratch directory is removed after a successful install.
 The current offline installer requires a Btrfs target filesystem for this
 disk-backed scratch path.
 
+While bootc is quiet during deployment, Anaconda refreshes the status message
+with elapsed time. The current `bootc install to-filesystem` interface does not
+provide machine-readable byte or layer progress, so the numeric progress does
+not advance during image import.
+
 ## Project layout
 
 ```text
 cubelinux-installer/
 |-- config/
 |   |-- anaconda.conf           # Hide the GTK account spoke
+|   |-- cubelinux.css           # Cubelinux Anaconda colors and logo placement
 |   |-- interactive-defaults.ks # Bootc install and disk-backed scratch setup
 |   `-- iso.yaml                # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
 |-- scripts/
 |   |-- build-iso.sh             # Build installer image and ISO
-|   `-- patch-anaconda-single-disk.py # Restrict GTK disk selection to one target
+|   |-- install-anaconda-branding.py # Fetch and apply the logo during the image build
+|   |-- patch-anaconda-single-disk.py # Restrict GTK disk selection to one target
+|   `-- patch-anaconda-bootc-status.py # Refresh status during quiet bootc deployment
 |-- .gitignore
 |-- Containerfile                # Anaconda GTK installer environment
 `-- README.md

@@ -19,6 +19,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         default-fonts-core-sans \
         default-fonts-other-sans \
         google-noto-sans-cjk-fonts \
+        librsvg2-tools \
         xorrisofs \
         squashfs-tools \
         grub2-common \
@@ -31,6 +32,14 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
 COPY scripts/patch-anaconda-single-disk.py /usr/local/sbin/patch-anaconda-single-disk.py
 RUN chmod 0755 /usr/local/sbin/patch-anaconda-single-disk.py && \
     python3 /usr/local/sbin/patch-anaconda-single-disk.py
+
+COPY scripts/patch-anaconda-bootc-status.py /usr/local/sbin/patch-anaconda-bootc-status.py
+RUN chmod 0755 /usr/local/sbin/patch-anaconda-bootc-status.py && \
+    python3 /usr/local/sbin/patch-anaconda-bootc-status.py
+
+COPY scripts/install-anaconda-branding.py /usr/local/sbin/install-anaconda-branding.py
+RUN chmod 0755 /usr/local/sbin/install-anaconda-branding.py && \
+    python3 /usr/local/sbin/install-anaconda-branding.py
 
 RUN rpm -q anaconda anaconda-core anaconda-gui anaconda-tui && \
     if rpm -q --quiet anaconda-webui || test -e /usr/share/cockpit/anaconda-webui; then \
@@ -58,6 +67,7 @@ RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
+COPY config/cubelinux.css /usr/share/anaconda/pixmaps/cubelinux.css
 COPY config/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
 COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 

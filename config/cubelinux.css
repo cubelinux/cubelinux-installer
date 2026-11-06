@@ -1,0 +1,25 @@
+/* Cubelinux Anaconda GTK branding. */
+@define-color cubelinux_sidebar #183244;
+
+.logo-sidebar {
+    background-image: none;
+    background-color: @cubelinux_sidebar;
+}
+
+.logo {
+    background-image: url('/usr/share/anaconda/pixmaps/sidebar-logo.png');
+    background-position: 50% 20px;
+    background-repeat: no-repeat;
+    background-color: transparent;
+}
+
+.product-logo {
+    background-image: none;
+    background-color: transparent;
+}
+
+AnacondaSpokeWindow #nav-box {
+    background-image: none;
+    background-color: @cubelinux_sidebar;
+    color: white;
+}
