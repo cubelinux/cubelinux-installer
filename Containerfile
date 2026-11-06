@@ -28,6 +28,10 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         python3 \
         && dnf clean all
 
+COPY scripts/patch-anaconda-single-disk.py /usr/local/sbin/patch-anaconda-single-disk.py
+RUN chmod 0755 /usr/local/sbin/patch-anaconda-single-disk.py && \
+    python3 /usr/local/sbin/patch-anaconda-single-disk.py
+
 RUN rpm -q anaconda anaconda-core anaconda-gui anaconda-tui && \
     if rpm -q --quiet anaconda-webui || test -e /usr/share/cockpit/anaconda-webui; then \
         echo 'GTK installer image unexpectedly contains Anaconda WebUI' >&2; \

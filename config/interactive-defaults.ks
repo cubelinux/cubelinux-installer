@@ -48,9 +48,12 @@ findmnt --target /var/tmp
 set -eu
 scratch_mount=/run/cubelinux-installer-btrfs-top
 scratch_dir="$scratch_mount/.cubelinux-installer-scratch"
-mountpoint -q /var/tmp
-umount /var/tmp
-rm -rf "$scratch_dir"
-umount "$scratch_mount"
-rmdir "$scratch_mount"
+if mountpoint -q /var/tmp; then
+    umount /var/tmp
+fi
+if mountpoint -q "$scratch_mount"; then
+    rm -rf "$scratch_dir"
+    umount "$scratch_mount"
+fi
+rmdir "$scratch_mount" 2>/dev/null || true
 %end

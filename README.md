@@ -4,8 +4,9 @@
 
 Build the bootable cubelinux installer ISO as a project separate from the
 cubelinux operating-system image. The ISO uses Fedora Anaconda's GTK interface,
-embeds the selected cubelinux bootc image, lets the user choose a target disk, and
-uses Anaconda's automatic partitioning on that disk. It does not create a user;
+embeds the selected cubelinux bootc image, lets the user choose one target disk,
+and uses Anaconda's automatic partitioning on that disk. Manual partitioning is
+hidden. It does not create a user;
 the installed system should start Plasma Setup on first boot.
 
 ## Current status
@@ -68,7 +69,8 @@ cubelinux-installer/
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
 |-- scripts/
-|   `-- build-iso.sh             # Build installer image and ISO
+|   |-- build-iso.sh             # Build installer image and ISO
+|   `-- patch-anaconda-single-disk.py # Restrict GTK disk selection to one target
 |-- .gitignore
 |-- Containerfile                # Anaconda GTK installer environment
 `-- README.md
@@ -100,6 +102,8 @@ different published bootc image. For a private GHCR package, also configure
 
 - The ISO is destructive to the selected target disk; make that clear in the
   installer flow and release notes.
+- The GTK storage selector must allow only one selected install disk, and manual
+  partitioning options must remain hidden.
 - The installer must not collect or create user account information.
 - Anaconda's GTK account spoke is hidden; verify this in the built installer.
 - The selected cubelinux payload is embedded as an OCI archive in the ISO and
