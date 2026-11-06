@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import glob
+import re
 import struct
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 
 LOGO_URL = (
@@ -28,6 +30,37 @@ def download_logo(destination: Path) -> None:
         sys.exit("The Cubelinux logo URL did not return a valid SVG")
 
     destination.write_bytes(logo)
+
+
+def resolve_svg_colors(svg_path: Path) -> None:
+    """Replace SVG custom-property fills with explicit colors for librsvg."""
+    svg = svg_path.read_text(encoding="utf-8")
+    try:
+        root = ElementTree.fromstring(svg)
+    except ElementTree.ParseError as error:
+        sys.exit(f"The Cubelinux logo is not valid SVG: {error}")
+
+    colors = {}
+    for element in root.iter():
+        for declaration in element.attrib.get("style", "").split(";"):
+            name, separator, value = declaration.partition(":")
+            name = name.strip()
+            if separator and name.startswith("--"):
+                colors[name] = value.strip()
+
+    variable_pattern = re.compile(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)")
+
+    def replace_variable(match: re.Match[str]) -> str:
+        name, fallback = match.groups()
+        color = colors.get(name) or (fallback.strip() if fallback else None)
+        if not color:
+            sys.exit(f"The Cubelinux logo uses an undefined SVG color: {name}")
+        return color
+
+    resolved = variable_pattern.sub(replace_variable, svg)
+    if "var(" in resolved:
+        sys.exit("The Cubelinux logo contains an unresolved SVG color")
+    svg_path.write_text(resolved, encoding="utf-8")
 
 
 def convert_primary_logo(svg_path: Path) -> None:
@@ -142,6 +175,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="cubelinux-branding-") as temporary_dir:
         svg_path = Path(temporary_dir) / "primary-logo.svg"
         download_logo(svg_path)
+        resolve_svg_colors(svg_path)
         convert_primary_logo(svg_path)
         install_logo_artwork(svg_path)
     set_installer_product_name()
