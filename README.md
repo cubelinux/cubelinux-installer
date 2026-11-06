@@ -48,12 +48,14 @@ not need to download the OS image. The installer skips bootc's update-origin
 fetch check during deployment; the same registry reference is retained as the
 installed system's update origin for later use.
 
-During installation, Anaconda binds a temporary directory on the selected
-target filesystem over the live installer's `/var/tmp`. Bootc uses this path
-while importing the embedded image, avoiding the small RAM-backed scratch area
-in the live ISO. The target filesystem therefore needs free space for the
-temporary import in addition to the installed system. The temporary directory
-is removed after a successful install.
+During installation, Anaconda mounts the selected Btrfs filesystem's top-level
+subvolume and binds a temporary directory from it over the live installer's
+`/var/tmp`. Keeping this scratch directory outside the target root subvolume
+prevents bootc from removing it while it initializes the installation. The
+target disk needs free space for the temporary import in addition to the
+installed system. The scratch directory is removed after a successful install.
+The current offline installer requires a Btrfs target filesystem for this
+disk-backed scratch path.
 
 ## Project layout
 
