@@ -10,8 +10,7 @@
     background-image: url('/usr/share/anaconda/pixmaps/sidebar-logo.png');
     background-position: 50% 20px;
     background-repeat: no-repeat;
-    /* Smaller sizing leaves the brand-guide clear space around the mark. */
-    background-size: 96px auto;
+    background-size: 132px auto;
     background-color: transparent;
 }
 
