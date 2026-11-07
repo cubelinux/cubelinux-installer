@@ -14,20 +14,19 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 
-LOGO_URL = (
-    "https://pub-eb590fbfc3074776ad4199c13b93d722.r2.dev/"
-    "logo/primary-on-transparent.svg"
-)
-LOGO_PNG_PATH = Path("/usr/share/cubelinux/branding/primary-logo.png")
+LOGO_BASE_URL = "https://pub-eb590fbfc3074776ad4199c13b93d722.r2.dev/logo/"
+PRIMARY_LOGO_URL = f"{LOGO_BASE_URL}primary-on-transparent.svg"
+SIDEBAR_LOGO_URL = f"{LOGO_BASE_URL}mono-for-dark-bg.svg"
+SIDEBAR_LOGO_PNG_PATH = Path("/usr/share/cubelinux/branding/sidebar-logo.png")
 
 
-def download_logo(destination: Path) -> None:
-    request = Request(LOGO_URL, headers={"User-Agent": "cubelinux-installer-build"})
+def download_logo(destination: Path, url: str) -> None:
+    request = Request(url, headers={"User-Agent": "cubelinux-installer-build"})
     with urlopen(request, timeout=30) as response:
         logo = response.read(5_000_001)
 
     if b"<svg" not in logo[:4096] or len(logo) > 5_000_000:
-        sys.exit("The Cubelinux logo URL did not return a valid SVG")
+        sys.exit(f"The Cubelinux logo URL did not return a valid SVG: {url}")
 
     destination.write_bytes(logo)
 
@@ -63,15 +62,15 @@ def resolve_svg_colors(svg_path: Path) -> None:
     svg_path.write_text(resolved, encoding="utf-8")
 
 
-def convert_primary_logo(svg_path: Path) -> None:
-    """Rasterize the downloaded artwork once as a high-resolution PNG."""
-    LOGO_PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
+def convert_sidebar_logo(svg_path: Path) -> None:
+    """Rasterize the approved dark-background logo as a high-resolution PNG."""
+    SIDEBAR_LOGO_PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             "/usr/bin/rsvg-convert",
             "--format=png",
             "--width=1024",
-            f"--output={LOGO_PNG_PATH}",
+            f"--output={SIDEBAR_LOGO_PNG_PATH}",
             str(svg_path),
         ],
         check=True,
@@ -119,7 +118,7 @@ def render_logo(svg_path: Path, target: Path) -> None:
 def install_logo_artwork(svg_path: Path) -> None:
     # Use a 1024px transparent PNG for the sidebar, scaled by GTK CSS to fit.
     # Other legacy raster slots retain their expected canvas sizes, with the
-    # vector's aspect ratio preserved inside those PNG canvases.
+    # full-color vector's aspect ratio preserved inside those PNG canvases.
     image_patterns = (
         "/usr/share/anaconda/pixmaps/anaconda_header.png",
         "/usr/share/anaconda/pixmaps/sidebar-logo.png",
@@ -152,7 +151,7 @@ def install_logo_artwork(svg_path: Path) -> None:
     sidebar_logo = Path("/usr/share/anaconda/pixmaps/sidebar-logo.png")
     for target in targets:
         if target == sidebar_logo:
-            target.write_bytes(LOGO_PNG_PATH.read_bytes())
+            target.write_bytes(SIDEBAR_LOGO_PNG_PATH.read_bytes())
         else:
             render_logo(svg_path, target)
 
@@ -164,8 +163,16 @@ def install_logo_artwork(svg_path: Path) -> None:
 
 
 def set_installer_product_name() -> None:
-    # Anaconda's liveinst launcher derives product name and version from this
-    # file. Keep os-release untouched for Fedora platform behavior.
+    # Anaconda reads its installer title from /.buildstamp. An empty version
+    # gives the requested "Cubelinux Installation" heading; IsFinal remains
+    # false so Anaconda keeps its accurate pre-release/testing indicator.
+    Path("/.buildstamp").write_text(
+        "[Main]\nProduct=Cubelinux\nVersion=\nIsFinal=False\n",
+        encoding="utf-8",
+    )
+
+    # Keep the live system release label branded while leaving os-release
+    # untouched for Fedora platform behavior.
     system_release = Path("/etc/system-release")
     system_release.unlink(missing_ok=True)
     system_release.write_text("cubelinux release 1.0\n", encoding="utf-8")
@@ -173,11 +180,14 @@ def set_installer_product_name() -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="cubelinux-branding-") as temporary_dir:
-        svg_path = Path(temporary_dir) / "primary-logo.svg"
-        download_logo(svg_path)
-        resolve_svg_colors(svg_path)
-        convert_primary_logo(svg_path)
-        install_logo_artwork(svg_path)
+        primary_svg_path = Path(temporary_dir) / "primary-logo.svg"
+        sidebar_svg_path = Path(temporary_dir) / "sidebar-logo.svg"
+        download_logo(primary_svg_path, PRIMARY_LOGO_URL)
+        resolve_svg_colors(primary_svg_path)
+        download_logo(sidebar_svg_path, SIDEBAR_LOGO_URL)
+        resolve_svg_colors(sidebar_svg_path)
+        convert_sidebar_logo(sidebar_svg_path)
+        install_logo_artwork(primary_svg_path)
     set_installer_product_name()
 
 
