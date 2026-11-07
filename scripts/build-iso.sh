@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_REF="${CUBELINUX_IMAGE_REF:-}"
+FEDORA_MIRROR_ROOT="${FEDORA_MIRROR_ROOT:-https://eu.edge.kernel.org/fedora}"
 REFRESH_IMAGE="${CUBELINUX_REFRESH_IMAGE:-0}"
 COMMIT_REF="${GITHUB_SHA:-local}"
 INSTALLER_REF="localhost/cubelinux-installer:local"
@@ -52,6 +53,7 @@ fi
 df -h /var/tmp /var/lib/containers "$ROOT/output"
 podman build \
     --build-arg "CUBELINUX_IMAGE_REF=$IMAGE_REF" \
+    --build-arg "FEDORA_MIRROR_ROOT=$FEDORA_MIRROR_ROOT" \
     --tag "$INSTALLER_REF" \
     --file Containerfile \
     .

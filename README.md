@@ -18,9 +18,15 @@ the embedded image installs without network access, that account creation is
 skipped, and that Plasma Setup starts after reboot.
 
 The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
-required package dependencies while skipping optional weak dependencies to keep
-the ISO smaller. During the container build, the installer downloads the
-Cubelinux primary SVG and rasterizes it into a transparent, 1024-pixel-wide PNG.
+required package dependencies from the pinned `eu.edge.kernel.org` Fedora
+mirror for Fedora 44 x86_64, rather than selecting another server through
+Fedora MirrorManager. Fedora currently lists this HTTPS mirror for Fedora 44.
+Set `FEDORA_MIRROR_ROOT` when running the build script to override the mirror
+root. The selected mirror must carry both the Fedora release and updates repos;
+the build will fail if that fixed mirror is unavailable. DNF skips optional
+weak dependencies to keep the ISO smaller. During the container build, the
+installer downloads the Cubelinux primary SVG and rasterizes it into a
+transparent, 1024-pixel-wide PNG.
 The GTK stylesheet scales the sidebar logo to fit. The installer product label
 and stylesheet use Cubelinux branding; Fedora OS identity metadata remains
 intact for platform behavior. The host workflow installs the current Fedora 44

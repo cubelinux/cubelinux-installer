@@ -2,11 +2,23 @@ ARG FEDORA_BOOTC_IMAGE=quay.io/fedora/fedora-bootc:44
 FROM ${FEDORA_BOOTC_IMAGE}
 
 ARG CUBELINUX_IMAGE_REF
+ARG FEDORA_MIRROR_ROOT=https://eu.edge.kernel.org/fedora
 # Anaconda detects WebUI from its Cockpit assets and prefers it when present.
 # Exclude WebUI so the installed GTK interface is selected. Avoid adding
 # optional weak dependencies to the live installer image.
 RUN test -n "${CUBELINUX_IMAGE_REF}" && \
-    dnf -y --setopt=install_weak_deps=False --exclude=anaconda-webui install \
+    dnf -y \
+        --disablerepo='*' \
+        --enablerepo=fedora \
+        --enablerepo=updates \
+        --setopt=fedora.baseurl=${FEDORA_MIRROR_ROOT}/releases/44/Everything/x86_64/os/ \
+        --setopt=fedora.metalink= \
+        --setopt=fedora.mirrorlist= \
+        --setopt=updates.baseurl=${FEDORA_MIRROR_ROOT}/updates/44/Everything/x86_64/ \
+        --setopt=updates.metalink= \
+        --setopt=updates.mirrorlist= \
+        --setopt=install_weak_deps=False \
+        --exclude=anaconda-webui install \
         anaconda \
         anaconda-install-img-deps \
         anaconda-dracut \
