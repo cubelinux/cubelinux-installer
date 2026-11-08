@@ -68,6 +68,12 @@ installed system. The scratch directory is removed after a successful install.
 The current offline installer requires a Btrfs target filesystem for this
 disk-backed scratch path.
 
+After bootc installs the system, a Kickstart `%post` step removes only the
+root (`/`) entry that Anaconda writes to the installed `/etc/fstab`. The running
+bootc root is a composefs overlay, so `systemd-remount-fs` cannot apply that
+Btrfs entry to `/`; leaving it in place causes a failed-unit warning at login.
+The `/boot`, `/boot/efi`, and `/home` entries remain unchanged.
+
 While bootc is quiet during deployment, Anaconda refreshes the status message
 with elapsed time. The current `bootc install to-filesystem` interface does not
 provide machine-readable byte or layer progress, so the numeric progress does
@@ -80,7 +86,7 @@ cubelinux-installer/
 |-- config/
 |   |-- anaconda.conf           # Hide the GTK account spoke
 |   |-- cubelinux.css           # Cubelinux Anaconda colors and logo placement
-|   |-- interactive-defaults.ks # Bootc install and disk-backed scratch setup
+|   |-- interactive-defaults.ks # Bootc install, scratch setup, and fstab cleanup
 |   `-- iso.yaml                # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
