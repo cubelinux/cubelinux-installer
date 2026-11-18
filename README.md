@@ -59,19 +59,15 @@ not need to download the OS image. The installer skips bootc's update-origin
 fetch check during deployment; the same registry reference is retained as the
 installed system's update origin for later use.
 
-During installation, Anaconda mounts the selected Btrfs filesystem's top-level
-subvolume and binds a temporary directory from it over the live installer's
-`/var/tmp`. Keeping this scratch directory outside the target root subvolume
-prevents bootc from removing it while it initializes the installation. The
-target disk needs free space for the temporary import in addition to the
-installed system. The scratch directory is removed after a successful install.
-The current offline installer requires a Btrfs target filesystem for this
-disk-backed scratch path.
+The bootc image import uses the installer's `/var/tmp` for temporary data. The
+selected target disk does not need a Btrfs filesystem; the current build uses
+ext4 as its default target filesystem.
 
 After bootc installs the system, a Kickstart `%post` step removes only the
 root (`/`) entry that Anaconda writes to the installed `/etc/fstab`. The running
-bootc root is a composefs overlay, so `systemd-remount-fs` cannot apply that
-Btrfs entry to `/`; leaving it in place causes a failed-unit warning at login.
+bootc root is a composefs overlay, so `systemd-remount-fs` cannot apply the
+install-time filesystem entry to `/`; leaving it in place causes a failed-unit
+warning at login.
 The `/boot`, `/boot/efi`, and `/home` entries remain unchanged.
 
 While bootc is quiet during deployment, Anaconda refreshes the status message
@@ -86,7 +82,7 @@ cubelinux-installer/
 |-- config/
 |   |-- anaconda.conf           # Hide the GTK account spoke
 |   |-- cubelinux.css           # Cubelinux Anaconda colors and logo placement
-|   |-- interactive-defaults.ks # Bootc install, scratch setup, and fstab cleanup
+|   |-- interactive-defaults.ks # Bootc install and fstab cleanup
 |   `-- iso.yaml                # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
