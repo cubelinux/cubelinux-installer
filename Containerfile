@@ -3,9 +3,8 @@ FROM ${FEDORA_BOOTC_IMAGE}
 
 ARG CUBELINUX_IMAGE_REF
 ARG FEDORA_MIRROR_ROOT=https://eu.edge.kernel.org/fedora
-# Anaconda detects WebUI from its Cockpit assets and prefers it when present.
-# Exclude WebUI so the installed GTK interface is selected. Avoid adding
-# optional weak dependencies to the live installer image.
+# Keep the live installer dependency set lean by excluding optional weak
+# dependencies.
 RUN test -n "${CUBELINUX_IMAGE_REF}" && \
     dnf -y \
         --disablerepo='*' \
@@ -18,44 +17,30 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         --setopt=updates.metalink= \
         --setopt=updates.mirrorlist= \
         --setopt=install_weak_deps=False \
-        --exclude=anaconda-webui install \
-        anaconda \
-        anaconda-install-img-deps \
-        anaconda-dracut \
+        --setopt=tsflags=nodocs \
+        install \
+        calamares \
+        qt6-qtwayland \
+        gnome-kiosk \
+        dbus-daemon \
         dracut-live \
         dracut-config-generic \
-        dracut-network \
-        net-tools \
         grub2-efi-x64-cdboot \
         plymouth \
         default-fonts-core-sans \
         default-fonts-other-sans \
         google-noto-sans-cjk-fonts \
-        librsvg2-tools \
         xorrisofs \
         squashfs-tools \
         grub2-common \
         grub2-pc-modules \
         podman \
         fuse-overlayfs \
-        python3 \
         && dnf clean all
 
-COPY scripts/patch-anaconda-single-disk.py /usr/local/sbin/patch-anaconda-single-disk.py
-RUN chmod 0755 /usr/local/sbin/patch-anaconda-single-disk.py && \
-    python3 /usr/local/sbin/patch-anaconda-single-disk.py
-
-COPY scripts/patch-anaconda-bootc-status.py /usr/local/sbin/patch-anaconda-bootc-status.py
-RUN chmod 0755 /usr/local/sbin/patch-anaconda-bootc-status.py && \
-    python3 /usr/local/sbin/patch-anaconda-bootc-status.py
-
-COPY scripts/install-anaconda-branding.py /usr/local/sbin/install-anaconda-branding.py
-RUN chmod 0755 /usr/local/sbin/install-anaconda-branding.py && \
-    python3 /usr/local/sbin/install-anaconda-branding.py
-
-RUN rpm -q anaconda anaconda-core anaconda-gui anaconda-tui && \
-    if rpm -q --quiet anaconda-webui || test -e /usr/share/cockpit/anaconda-webui; then \
-        echo 'GTK installer image unexpectedly contains Anaconda WebUI' >&2; \
+RUN rpm -q calamares qt6-qtwayland gnome-kiosk && \
+    if rpm -qa 'anaconda*' | grep -q .; then \
+        echo 'Anaconda packages must not be present in the Calamares ISO.' >&2; \
         exit 1; \
     fi
 
@@ -65,46 +50,40 @@ RUN mkdir -p "$(realpath /root)" && \
     kernel="$(basename "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | head -n 1)")" && \
     test -n "$kernel" && \
     DRACUT_NO_XATTR=1 dracut --force --no-hostonly \
-        --add "anaconda dmsquash-live" \
+        --add "dmsquash-live" \
         "/usr/lib/modules/${kernel}/initramfs.img" "$kernel"
 
-# Keep Podman's storage usable if Anaconda or bootc needs it in the live system.
+# Keep Podman's storage usable for the embedded-image bootc install.
 RUN mkdir -p /etc/containers && \
     printf '[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "/usr/bin/fuse-overlayfs"\n' \
         > /etc/containers/storage.conf
 
-RUN mkdir -p /usr/local/sbin
+COPY config/calamares/ /etc/calamares/
+COPY scripts/launch-calamares /usr/local/sbin/cubelinux-installer-launch
+COPY scripts/install-bootc /usr/local/libexec/cubelinux/install-bootc
+COPY scripts/cleanup-installed-fstab /usr/local/libexec/cubelinux/cleanup-installed-fstab
+RUN chmod 0755 \
+        /usr/local/sbin/cubelinux-installer-launch \
+        /usr/local/libexec/cubelinux/install-bootc \
+        /usr/local/libexec/cubelinux/cleanup-installed-fstab
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 COPY config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
-COPY config/anaconda.conf /etc/anaconda/conf.d/10-cubelinux.conf
-COPY config/cubelinux.css /usr/share/anaconda/pixmaps/cubelinux.css
-COPY config/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
 COPY output/cubelinux-payload.oci.tar /usr/share/cubelinux/payload.oci.tar
 
-RUN sed "s|__CUBELINUX_IMAGE_REF__|${CUBELINUX_IMAGE_REF}|g" \
-        /usr/share/anaconda/interactive-defaults.ks \
-        > /usr/share/anaconda/interactive-defaults.ks.tmp && \
-    mv /usr/share/anaconda/interactive-defaults.ks.tmp \
-        /usr/share/anaconda/interactive-defaults.ks && \
-    echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
+# Autologin to the Calamares launcher and avoid automounting install disks.
+RUN printf '%s\n' "${CUBELINUX_IMAGE_REF}" > /usr/share/cubelinux/target-image-ref && \
+    echo 'install:x:0:0:root:/root:/usr/local/sbin/cubelinux-installer-launch' >> /etc/passwd && \
     echo 'install::14438:0:99999:7:::' >> /etc/shadow && \
     passwd -d root && \
     systemctl mask bootloader-update.service && \
-    mkdir -p /etc/systemd/system/anaconda-pre.service.d && \
-    printf '[Service]\nStandardInput=null\n' > /etc/systemd/system/anaconda-pre.service.d/override.conf && \
-    mv /usr/share/anaconda/list-harddrives-stub /usr/bin/list-harddrives && \
-    mv /etc/yum.repos.d /etc/anaconda.repos.d && \
-    ln -s /lib/systemd/system/anaconda.target /etc/systemd/system/default.target && \
     rm -f /usr/lib/systemd/system-generators/systemd-gpt-auto-generator && \
-    ln -sfn /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/system/autovt@.service && \
-    mkdir -p /usr/lib/systemd/logind.conf.d && \
-    printf '[Login]\nReserveVT=2\n' > /usr/lib/systemd/logind.conf.d/anaconda-shell.conf
-
-# Keep the installed image's registry reference as its update origin, but do
-# not require network access during installation: the source image is embedded
-# in the ISO. bootc otherwise verifies the update image can be fetched.
-RUN cp -L /usr/bin/bootc /usr/libexec/bootc-original
-COPY scripts/bootc-offline /usr/bin/bootc
-RUN chmod 0755 /usr/bin/bootc
+    ln -sfn /usr/lib/systemd/system/multi-user.target /etc/systemd/system/default.target && \
+    ln -sfn getty@.service /usr/lib/systemd/system/autovt@.service && \
+    mkdir -p /etc/systemd/system/getty@tty1.service.d \
+        /etc/systemd/system/getty.target.wants && \
+    printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin install --noclear --noissue %%I linux\n' \
+        > /etc/systemd/system/getty@tty1.service.d/10-cubelinux-installer.conf && \
+    ln -sfn /usr/lib/systemd/system/getty@.service \
+        /etc/systemd/system/getty.target.wants/getty@tty1.service

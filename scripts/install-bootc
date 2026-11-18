@@ -1,0 +1,82 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+action=${1:?Usage: install-bootc {install|finalize} ROOT_PATH}
+target_root=${2:?Usage: install-bootc {install|finalize} ROOT_PATH}
+target_root=$(realpath -e "$target_root")
+target_image_ref=$(</usr/share/cubelinux/target-image-ref)
+payload=/usr/share/cubelinux/payload.oci.tar
+payload_image=localhost/cubelinux-offline:payload
+
+if [[ ! -d "$target_root" || -z "$target_image_ref" ]]; then
+    echo 'The target root or update image reference is missing.' >&2
+    exit 1
+fi
+
+if [[ "$action" == install ]]; then
+    if [[ ! -s "$payload" ]]; then
+        echo "The embedded OCI payload is missing or empty: $payload" >&2
+        exit 1
+    fi
+
+    if ! /usr/bin/podman image exists "$payload_image"; then
+        /usr/bin/podman load --input "$payload"
+    fi
+elif [[ "$action" != finalize ]]; then
+    echo "Unknown bootc action: $action" >&2
+    exit 2
+fi
+
+bootc_in_payload() {
+    /usr/bin/podman run --rm \
+        --pull=never \
+        --privileged \
+        --pid=host \
+        --ipc=host \
+        --network=none \
+        --security-opt label=type:unconfined_t \
+        --volume /dev:/dev \
+        --volume /var/lib/containers:/var/lib/containers \
+        --volume "$target_root:/target:rw" \
+        --entrypoint /usr/bin/bootc \
+        "$payload_image" \
+        "$@"
+}
+
+if [[ "$action" == install ]]; then
+    root_uuid=$(/usr/bin/findmnt --noheadings --output UUID --target "$target_root" | /usr/bin/tr -d '[:space:]')
+    if [[ -z "$root_uuid" ]]; then
+        echo "Could not determine the UUID of the mounted root filesystem: $target_root" >&2
+        exit 1
+    fi
+
+    bootc_args=(
+        install to-filesystem
+        --skip-fetch-check
+        --skip-finalize
+        "--target-imgref=$target_image_ref"
+        "--root-mount-spec=UUID=$root_uuid"
+    )
+    boot_mount="$target_root/boot"
+    if [[ -d "$boot_mount" ]]; then
+        boot_target=$(/usr/bin/findmnt --noheadings --output TARGET --target "$boot_mount" | /usr/bin/sed 's/[[:space:]]*$//')
+        if [[ -n "$boot_target" && "$(realpath -e "$boot_target")" == "$(realpath -e "$boot_mount")" ]]; then
+            boot_uuid=$(/usr/bin/findmnt --noheadings --output UUID --target "$boot_mount" | /usr/bin/tr -d '[:space:]')
+            if [[ -z "$boot_uuid" ]]; then
+                echo "Could not determine the UUID of the mounted /boot filesystem: $boot_mount" >&2
+                exit 1
+            fi
+            bootc_args+=("--boot-mount-spec=UUID=$boot_uuid")
+        fi
+    fi
+
+    bootc_in_payload "${bootc_args[@]}" /target
+else
+    if ! /usr/bin/podman image exists "$payload_image"; then
+        echo "The embedded image is not loaded in Podman storage: $payload_image" >&2
+        exit 1
+    fi
+
+    bootc_in_payload install finalize /target
+    /usr/bin/podman image rm --force "$payload_image"
+fi

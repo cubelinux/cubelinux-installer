@@ -1,0 +1,26 @@
+componentName: cubelinux
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo: false
+
+images:
+  productIcon: icon.png
+  productLogo: icon.png
+  productWelcome: primary.png
+
+style:
+  SidebarBackground: "#111827"
+  SidebarText: "#F9FAFB"
+  SidebarTextCurrent: "#111827"
+  SidebarBackgroundCurrent: "#43A9D5"
+
+slideshow: /usr/share/calamares/branding/default/show.qml
+
+strings:
+  productName: Cubelinux
+  shortProductName: Cubelinux
+  version: Rolling
+  shortVersion: Rolling
+  versionedName: Cubelinux Rolling
+  shortVersionedName: Cubelinux
+  bootloaderEntryName: Cubelinux

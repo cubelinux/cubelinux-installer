@@ -8,6 +8,7 @@ REFRESH_IMAGE="${CUBELINUX_REFRESH_IMAGE:-0}"
 COMMIT_REF="${GITHUB_SHA:-local}"
 INSTALLER_REF="localhost/cubelinux-installer:local"
 PAYLOAD_ARCHIVE="$ROOT/output/cubelinux-payload.oci.tar"
+PAYLOAD_SIZE_BYTES=0
 
 cleanup() {
     rm -f "$PAYLOAD_ARCHIVE"
@@ -42,7 +43,9 @@ if [[ "$REFRESH_IMAGE" == "1" ]] || ! podman image exists "$IMAGE_REF"; then
 else
     printf 'Using cached image %s (set CUBELINUX_REFRESH_IMAGE=1 to pull it again)\n' "$IMAGE_REF"
 fi
-skopeo copy "containers-storage:$IMAGE_REF" "oci-archive:$PAYLOAD_ARCHIVE:payload"
+skopeo copy "containers-storage:$IMAGE_REF" \
+    "oci-archive:$PAYLOAD_ARCHIVE:localhost/cubelinux-offline:payload"
+PAYLOAD_SIZE_BYTES="$(stat -c '%s' "$PAYLOAD_ARCHIVE")"
 if [[ "${CUBELINUX_CI_PRUNE:-}" == "1" ]]; then
     # CI has no persistent image cache, so free the source layers before the
     # installer build competes for runner storage.
@@ -71,6 +74,7 @@ if [[ ! -f "$ISO_PATH" ]]; then
     echo "image-builder completed without producing $ISO_PATH" >&2
     exit 1
 fi
+ISO_SIZE_BYTES="$(stat -c '%s' "$ISO_PATH")"
 
 (
     cd "$ROOT/output"
@@ -78,4 +82,7 @@ fi
 )
 printf 'commit=%s\nimage=%s\n' \
     "$COMMIT_REF" "$IMAGE_REF" > "$ROOT/output/cubelinux-installer-build.txt"
+printf 'iso_size_bytes=%s\noffline_payload_size_bytes=%s\n' \
+    "$ISO_SIZE_BYTES" "$PAYLOAD_SIZE_BYTES" \
+    >> "$ROOT/output/cubelinux-installer-build.txt"
 printf 'Built %s\n' "$ISO_PATH"

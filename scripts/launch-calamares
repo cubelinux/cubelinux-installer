@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+if [[ "${CUBELINUX_DBUS_SESSION:-0}" != 1 ]]; then
+    export CUBELINUX_DBUS_SESSION=1
+    exec /usr/bin/dbus-run-session -- "$0" "$@"
+fi
+
+runtime_dir=${XDG_RUNTIME_DIR:-/run/user/0}
+if [[ ! -d "$runtime_dir" ]]; then
+    /usr/bin/install -d -m 0700 "$runtime_dir"
+fi
+
+export XDG_RUNTIME_DIR="$runtime_dir"
+export XDG_SESSION_TYPE=wayland
+export WAYLAND_DISPLAY=cubelinux-installer
+export QT_QPA_PLATFORM=wayland
+
+kiosk_args=(
+    --wayland
+    --wayland-display "$WAYLAND_DISPLAY"
+)
+kiosk_help=$(/usr/bin/gnome-kiosk --help 2>&1 || true)
+if [[ "$kiosk_help" == *--enable-vt-switch* ]]; then
+    kiosk_args+=(--enable-vt-switch)
+fi
+
+/usr/bin/gnome-kiosk "${kiosk_args[@]}" &
+kiosk_pid=$!
+
+cleanup() {
+    if /usr/bin/kill -0 "$kiosk_pid" 2>/dev/null; then
+        /usr/bin/kill "$kiosk_pid" 2>/dev/null || true
+    fi
+    wait "$kiosk_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+for ((attempt = 0; attempt < 1200; attempt++)); do
+    if [[ -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
+        break
+    fi
+    if ! /usr/bin/kill -0 "$kiosk_pid" 2>/dev/null; then
+        wait "$kiosk_pid" || true
+        echo 'GNOME Kiosk exited before its Wayland socket became ready.' >&2
+        exit 1
+    fi
+    /usr/bin/sleep 0.1
+done
+
+if [[ ! -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
+    echo "Timed out waiting for Wayland socket: $runtime_dir/$WAYLAND_DISPLAY" >&2
+    exit 1
+fi
+
+/usr/bin/calamares "$@"
