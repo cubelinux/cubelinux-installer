@@ -72,9 +72,15 @@ network access. The installer skips bootc's update-origin fetch check during
 deployment; the same registry reference is retained as the installed system's
 update origin for later use.
 
-The bootc image import uses the installer's `/var/tmp` for temporary data. The
-selected target disk does not need a Btrfs filesystem; the current build uses
-ext4 as its default target filesystem.
+The live ISO uses Dracut's writable OverlayFS layer for temporary Podman storage
+when it has at least three times the embedded OCI archive size plus 1 GiB
+available. For RAM-backed overlays, the check also limits this to current
+`MemAvailable`. If live space is unavailable or too small, the helper uses a
+temporary Podman image store and `TMPDIR` under a hidden directory on the
+selected target filesystem. It removes the temporary storage after bootc
+finalization. When the target filesystem is used, it needs enough free space
+for both the imported payload and the installed system; ext4 remains the
+default target filesystem.
 
 After bootc installs the system, a Calamares job removes the root (`/`) entry
 from the installed `/etc/fstab`. The running bootc root is a composefs overlay,
