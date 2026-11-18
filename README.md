@@ -25,6 +25,11 @@ the build will fail if that fixed mirror is unavailable. DNF skips optional
 weak dependencies to keep the ISO smaller. The host workflow installs the
 current Fedora 44 `image-builder` package for each run.
 
+The installer image includes `xorrisofs` and `isomd5sum` for ISO assembly and
+media-check metadata. Image Builder uses the `--bootc-ref` container as its
+build root by default, so installing these tools only on the Fedora host does
+not make them available to the ISO build stages.
+
 ## Calamares migration
 
 Calamares is the only installer in this branch. Its configuration uses the
@@ -42,8 +47,8 @@ payload sizes so they can be compared with the current release.
 ## Build prerequisites
 
 Use a Fedora 44 x86_64 build host with rootful Podman and `image-builder`
-installed.
-The build needs root privileges for image-builder's loop devices and mounts.
+installed. The build needs root privileges for image-builder's loop devices
+and mounts.
 The cubelinux image must be published in a registry accessible to the builder.
 
 Build using the exact image reference that the ISO should install:

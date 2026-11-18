@@ -31,6 +31,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         default-fonts-other-sans \
         google-noto-sans-cjk-fonts \
         xorrisofs \
+        isomd5sum \
         squashfs-tools \
         grub2-common \
         grub2-pc-modules \
@@ -38,7 +39,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         fuse-overlayfs \
         && dnf clean all
 
-RUN rpm -q calamares qt6-qtwayland gnome-kiosk && \
+RUN rpm -q calamares qt6-qtwayland gnome-kiosk isomd5sum && \
     if rpm -qa 'anaconda*' | grep -q .; then \
         echo 'Anaconda packages must not be present in the Calamares ISO.' >&2; \
         exit 1; \
