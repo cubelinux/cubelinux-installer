@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-action=${1:?Usage: install-bootc {install|finalize} ROOT_PATH}
-target_root=${2:?Usage: install-bootc {install|finalize} ROOT_PATH}
+action=${1:?Usage: install-bootc ACTION ROOT_PATH}
+target_root=${2:?Usage: install-bootc ACTION ROOT_PATH}
 target_root=$(realpath -e "$target_root")
 target_image_ref=$(</usr/share/cubelinux/target-image-ref)
 payload=/usr/share/cubelinux/payload.oci.tar
