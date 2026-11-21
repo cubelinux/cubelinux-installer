@@ -177,7 +177,7 @@ elif [[ "$action" != finalize ]]; then
 fi
 
 bootc_in_payload() {
-    /usr/bin/podman run --rm \
+    podman run --rm \
         --pull=never \
         --privileged \
         --pid=host \
