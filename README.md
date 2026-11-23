@@ -67,8 +67,10 @@ sudo CUBELINUX_IMAGE_REF=ghcr.io/cubelinux/cubelinux:main CUBELINUX_REFRESH_IMAG
 
 The resulting ISO is written under `output/`. The build script embeds the
 selected image as an OCI archive inside the installer image. Calamares imports
-that archive into local Podman storage and runs its bootc installer without
-network access. The installer skips bootc's update-origin fetch check during
+the archive into temporary Podman storage to run the image's bootc installer;
+bootc reads the install source directly from the embedded archive, so the
+installation does not depend on network access or Podman's host-side image
+lookup. The installer skips bootc's update-origin fetch check during
 deployment; the same registry reference is retained as the installed system's
 update origin for later use.
 
