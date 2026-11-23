@@ -155,6 +155,31 @@ log_scratch_capacity() {
     fi
 }
 
+run_bootc_with_scratch_monitor() {
+    local bootc_pid monitor_pid status available
+
+    bootc_in_payload "$@" &
+    bootc_pid=$!
+    (
+        while /usr/bin/kill -0 "$bootc_pid" 2>/dev/null; do
+            available=$(/usr/bin/df --block-size=1 --output=avail -- "$podman_tmpdir" \
+                | /usr/bin/tail -n 1 | /usr/bin/tr -d '[:space:]') || available=unavailable
+            printf 'Installer scratch available bytes during bootc: %s\n' "$available"
+            /usr/bin/sleep 0.5
+        done
+    ) &
+    monitor_pid=$!
+
+    if wait "$bootc_pid"; then
+        status=0
+    else
+        status=$?
+    fi
+    /usr/bin/kill "$monitor_pid" 2>/dev/null || true
+    wait "$monitor_pid" 2>/dev/null || true
+    return "$status"
+}
+
 cleanup_failed_install() {
     local status=$?
     trap - EXIT
@@ -240,7 +265,7 @@ if [[ "$action" == install ]]; then
     fi
 
     log_scratch_capacity
-    bootc_in_payload "${bootc_args[@]}" /target
+    run_bootc_with_scratch_monitor "${bootc_args[@]}" /target
     trap - EXIT
 else
     if ! find_existing_installer_storage; then
