@@ -69,10 +69,11 @@ The resulting ISO is written under `output/`. The build script embeds the
 selected image as an OCI archive inside the installer image. Calamares imports
 the archive into temporary Podman storage to run the image's bootc installer;
 bootc reads the install source directly from the embedded archive, so the
-installation does not depend on network access or Podman's host-side image
-lookup. The installer skips bootc's update-origin fetch check during
-deployment; the same registry reference is retained as the installed system's
-update origin for later use.
+installer bind-mounts its selected scratch directory at `/var/tmp` inside the
+bootc container for archive extraction. The installation does not depend on
+network access or Podman's host-side image lookup. The installer skips bootc's
+update-origin fetch check during deployment; the same registry reference is
+retained as the installed system's update origin for later use.
 
 The live ISO uses Dracut's writable OverlayFS layer for temporary Podman storage
 when it has at least three times the embedded OCI archive size plus 1 GiB

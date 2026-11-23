@@ -186,6 +186,7 @@ bootc_in_payload() {
         --security-opt label=type:unconfined_t \
         --volume /dev:/dev \
         --volume /usr/share/cubelinux:/usr/share/cubelinux:ro \
+        --volume "$podman_tmpdir:/var/tmp:rw" \
         --volume "$target_root:/target:rw" \
         --volume "$installer_storage:/target/.cubelinux-installer-podman:rw" \
         --volume "$installer_storage/containers:/var/lib/containers:rw" \
