@@ -17,6 +17,7 @@ podman_graphroot=
 podman_tmpdir=
 podman_runroot=/run/cubelinux-installer-podman
 installer_storage_prepared=0
+host_var_tmp_mounted=0
 
 storage_is_owned() {
     local storage_path=${1:?Storage path is required}
@@ -139,6 +140,20 @@ podman() {
         "$@"
 }
 
+bind_scratch_to_host_var_tmp() {
+    /usr/bin/mount --bind "$podman_tmpdir" /var/tmp
+    host_var_tmp_mounted=1
+    echo "Host /var/tmp capacity during bootc:"
+    /usr/bin/df --block-size=1 --output=source,fstype,size,used,avail,target -- /var/tmp
+}
+
+restore_host_var_tmp() {
+    if (( host_var_tmp_mounted )); then
+        /usr/bin/umount /var/tmp || return 1
+        host_var_tmp_mounted=0
+    fi
+}
+
 log_scratch_capacity() {
     echo "Installer scratch capacity before bootc:"
     if ! /usr/bin/df --block-size=1 --output=source,fstype,size,used,avail,target -- "$podman_tmpdir"; then
@@ -183,6 +198,10 @@ run_bootc_with_scratch_monitor() {
 cleanup_failed_install() {
     local status=$?
     trap - EXIT
+    if ! restore_host_var_tmp; then
+        echo "Could not unmount installer scratch from host /var/tmp; preserving $installer_storage." >&2
+        exit "$status"
+    fi
     if (( status != 0 )) && (( installer_storage_prepared )); then
         if storage_is_owned "$installer_storage"; then
             remove_installer_storage || true
@@ -264,8 +283,10 @@ if [[ "$action" == install ]]; then
         fi
     fi
 
+    bind_scratch_to_host_var_tmp
     log_scratch_capacity
     run_bootc_with_scratch_monitor "${bootc_args[@]}" /target
+    restore_host_var_tmp
     trap - EXIT
 else
     if ! find_existing_installer_storage; then
