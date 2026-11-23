@@ -139,6 +139,22 @@ podman() {
         "$@"
 }
 
+log_scratch_capacity() {
+    echo "Installer scratch capacity before bootc:"
+    if ! /usr/bin/df --block-size=1 --output=source,fstype,size,used,avail,target -- "$podman_tmpdir"; then
+        echo "Could not read installer scratch capacity on the live system." >&2
+    fi
+
+    echo "Payload container /var/tmp capacity before bootc:"
+    if ! podman run --rm --pull=never \
+        --volume "$podman_tmpdir:/var/tmp:rw" \
+        --entrypoint /usr/bin/df \
+        "$payload_image" \
+        --block-size=1 --output=source,fstype,size,used,avail,target /var/tmp; then
+        echo "Could not read /var/tmp capacity inside the payload container." >&2
+    fi
+}
+
 cleanup_failed_install() {
     local status=$?
     trap - EXIT
@@ -223,6 +239,7 @@ if [[ "$action" == install ]]; then
         fi
     fi
 
+    log_scratch_capacity
     bootc_in_payload "${bootc_args[@]}" /target
     trap - EXIT
 else
