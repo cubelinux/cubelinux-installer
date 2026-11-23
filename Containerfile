@@ -63,10 +63,12 @@ COPY config/calamares/ /etc/calamares/
 COPY scripts/launch-calamares /usr/local/sbin/cubelinux-installer-launch
 COPY scripts/install-bootc /usr/local/libexec/cubelinux/install-bootc
 COPY scripts/cleanup-installed-fstab /usr/local/libexec/cubelinux/cleanup-installed-fstab
+COPY scripts/setup-machine-id /usr/local/libexec/cubelinux/setup-machine-id
 RUN chmod 0755 \
         /usr/local/sbin/cubelinux-installer-launch \
         /usr/local/libexec/cubelinux/install-bootc \
-        /usr/local/libexec/cubelinux/cleanup-installed-fstab
+        /usr/local/libexec/cubelinux/cleanup-installed-fstab \
+        /usr/local/libexec/cubelinux/setup-machine-id
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
