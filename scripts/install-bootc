@@ -154,47 +154,6 @@ restore_host_var_tmp() {
     fi
 }
 
-log_scratch_capacity() {
-    echo "Installer scratch capacity before bootc:"
-    if ! /usr/bin/df --block-size=1 --output=source,fstype,size,used,avail,target -- "$podman_tmpdir"; then
-        echo "Could not read installer scratch capacity on the live system." >&2
-    fi
-
-    echo "Payload container /var/tmp capacity before bootc:"
-    if ! podman run --rm --pull=never \
-        --volume "$podman_tmpdir:/var/tmp:rw" \
-        --entrypoint /usr/bin/df \
-        "$payload_image" \
-        --block-size=1 --output=source,fstype,size,used,avail,target /var/tmp; then
-        echo "Could not read /var/tmp capacity inside the payload container." >&2
-    fi
-}
-
-run_bootc_with_scratch_monitor() {
-    local bootc_pid monitor_pid status available
-
-    bootc_in_payload "$@" &
-    bootc_pid=$!
-    (
-        while /usr/bin/kill -0 "$bootc_pid" 2>/dev/null; do
-            available=$(/usr/bin/df --block-size=1 --output=avail -- "$podman_tmpdir" \
-                | /usr/bin/tail -n 1 | /usr/bin/tr -d '[:space:]') || available=unavailable
-            printf 'Installer scratch available bytes during bootc: %s\n' "$available"
-            /usr/bin/sleep 0.5
-        done
-    ) &
-    monitor_pid=$!
-
-    if wait "$bootc_pid"; then
-        status=0
-    else
-        status=$?
-    fi
-    /usr/bin/kill "$monitor_pid" 2>/dev/null || true
-    wait "$monitor_pid" 2>/dev/null || true
-    return "$status"
-}
-
 cleanup_failed_install() {
     local status=$?
     trap - EXIT
@@ -284,8 +243,7 @@ if [[ "$action" == install ]]; then
     fi
 
     bind_scratch_to_host_var_tmp
-    log_scratch_capacity
-    run_bootc_with_scratch_monitor "${bootc_args[@]}" /target
+    bootc_in_payload "${bootc_args[@]}" /target
     restore_host_var_tmp
     trap - EXIT
 else
