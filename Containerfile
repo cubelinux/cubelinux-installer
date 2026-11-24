@@ -21,6 +21,7 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         install \
         calamares \
         qt6-qtwayland \
+        qt6-qtdeclarative \
         gnome-kiosk \
         dbus-daemon \
         dracut-live \
@@ -34,6 +35,9 @@ RUN test -n "${CUBELINUX_IMAGE_REF}" && \
         isomd5sum \
         squashfs-tools \
         grub2-common \
+        grub2-efi-x64-modules \
+        grub2-tools-extra \
+        efibootmgr \
         grub2-pc-modules \
         podman \
         fuse-overlayfs \
@@ -60,19 +64,36 @@ RUN mkdir -p /etc/containers && \
         > /etc/containers/storage.conf
 
 COPY config/calamares/ /etc/calamares/
+COPY config/calamares/custom-modules/ /usr/share/cubelinux-installer/calamares-modules/
+COPY output/recovery-app/ /usr/lib/cubelinux-recovery/
+COPY output/recovery-app/recovery-ui /usr/local/libexec/cubelinux/recovery-ui
 COPY scripts/launch-calamares /usr/local/sbin/cubelinux-installer-launch
-COPY scripts/install-bootc /usr/local/libexec/cubelinux/install-bootc
+COPY output/recovery-app/runtime/install-bootc /usr/local/libexec/cubelinux/install-bootc
 COPY scripts/stage-recovery /usr/local/libexec/cubelinux/stage-recovery
 COPY scripts/validate-recovery-media /usr/local/libexec/cubelinux/validate-recovery-media
-COPY scripts/verify-recovery-bundle /usr/local/libexec/cubelinux/verify-recovery-bundle
-COPY scripts/cleanup-installed-fstab /usr/local/libexec/cubelinux/cleanup-installed-fstab
+COPY output/recovery-app/runtime/verify-recovery-bundle /usr/local/libexec/cubelinux/verify-recovery-bundle
+COPY output/recovery-app/runtime/check-recovery-layout /usr/local/libexec/cubelinux/check-recovery-layout
+COPY output/recovery-app/runtime/factory-reset /usr/local/libexec/cubelinux/factory-reset
+COPY output/recovery-app/runtime/install-recovery-boot /usr/local/libexec/cubelinux/install-recovery-boot
+COPY output/recovery-app/runtime/cleanup-installed-fstab /usr/local/libexec/cubelinux/cleanup-installed-fstab
 RUN chmod 0755 \
         /usr/local/sbin/cubelinux-installer-launch \
         /usr/local/libexec/cubelinux/install-bootc \
         /usr/local/libexec/cubelinux/stage-recovery \
         /usr/local/libexec/cubelinux/validate-recovery-media \
         /usr/local/libexec/cubelinux/verify-recovery-bundle \
+        /usr/local/libexec/cubelinux/check-recovery-layout \
+        /usr/local/libexec/cubelinux/factory-reset \
+        /usr/local/libexec/cubelinux/install-recovery-boot \
         /usr/local/libexec/cubelinux/cleanup-installed-fstab
+
+# Check the copied Qt executable and both QML screens against the live image's
+# Qt libraries so an incompatible system image fails during the ISO build.
+RUN ldd /usr/local/libexec/cubelinux/recovery-ui > /tmp/recovery-ui-ldd && \
+    ! grep -q 'not found' /tmp/recovery-ui-ldd && \
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+        /usr/local/libexec/cubelinux/recovery-ui --check-qml && \
+    rm -f /tmp/recovery-ui-ldd
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 

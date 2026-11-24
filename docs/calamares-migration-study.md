@@ -160,9 +160,9 @@ in [recovery-partition-design.md](recovery-partition-design.md).
    `CUBE_RECOVERY` and `CUBE_ROOT` ext4 partitions and copies the release's live
    kernel, initramfs, SquashFS image, and checksum manifest to recovery. Bundle
    capacity and partition layout still need VM validation.
-2. **Add and preserve the recovery boot path:** ensure bootc updates and root
-   reinstalls cannot remove the recovery entry or required EFI files.
-3. **Add the one-action reset flow:** verify payload and target partition IDs
+2. **Recovery boot path:** an EFI entry and a two-slot boot selector are
+   implemented. Verify they survive bootc updates and root reinstalls.
+3. **One-action reset flow:** the current helper checks payload and partition IDs
    before formatting; reinstall only OS and writable data partitions; retain
    recovery; reboot into first-boot account setup. Use
    `bootc install to-filesystem`, which accepts a filesystem prepared and
@@ -171,7 +171,11 @@ in [recovery-partition-design.md](recovery-partition-design.md).
 4. **Recovery acceptance:** test Erase, Replace, and Alongside layouts, normal
    boot, recovery boot when the installed root is unavailable, an offline full
    reset, and a second reset using the same recovery partition. Verify user
-   data is gone and recovery still boots.
+   data is gone and recovery still boots. The current prototype requires UEFI
+   with Secure Boot disabled and does not offer encrypted root installations.
+5. **Recovery updates:** the installed system stages a second recovery slot
+   from the booted image digest. Validate slot activation and interruption
+   handling with actual release images.
 
 Do not use plain `to-disk --wipe` for factory reset unless the recovery
 partition and its boot path are deliberately recreated and verified. If

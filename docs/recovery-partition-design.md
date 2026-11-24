@@ -10,13 +10,13 @@ This is a recovery feature, not a promise that a modified or damaged disk can
 be repaired. The recovery files must remain separate from the filesystem that
 the reset reformats.
 
-## Proposed first layout
+## Implemented first layout
 
 Use GPT with three partitions for a standard UEFI installation:
 
 ```text
 | EFI System | cubelinux Recovery (ext4) | cubelinux Root (ext4, remaining space) |
-| 600 MiB    | 16 GiB                      | rest of disk                           |
+| 600 MiB    | 32 GiB                      | rest of disk                           |
 ```
 
 Use short, stable labels such as `CUBE_RECOVERY` and `CUBE_ROOT`. Keep the
@@ -25,20 +25,19 @@ existing EFI System Partition and the recovery partition are preserved during
 factory reset. The root partition contains the OS and all mutable system and
 user data in the current layout, so formatting it resets the machine's state.
 
-The initial recovery partition size is 16 GiB. Before showing Calamares, the
-installer checks that the kernel, initramfs, and live squashfs fit under 14
-GiB, leaving space for ext4's reserved blocks and at least 1 GiB of working
-space. The staging job checks the actual available space again before copying.
+The recovery partition is 32 GiB. The installer limits each bundle to
+14 GiB and reserves space for a second slot, ext4 reserve and working space.
+The staging job checks available space again before copying the first slot.
 
-Calamares' custom `partitionLayout` is applied when Erase, Replace, or
-Alongside creates a new cubelinux layout. This can provision the recovery
-partition for each automated choice, provided the selected disk or free-space
-region is large enough. That is separate from bootc's ability to install onto
-the newly mounted root filesystem.
+Calamares' custom `partitionLayout` provisions this layout for Erase disk.
+Erase is selected by default. Stock Calamares may still display Replace or
+Alongside when existing operating systems are detected; the installer rejects
+those choices before any partition jobs run because they do not reliably
+create the required recovery layout.
 
 ## Recovery contents and boot
 
-For the first prototype, reuse the release-matched live installer system
+The implementation reuses the release-matched live installer system
 rather than building a second OS image. During installation, copy these ISO
 assets to the recovery partition:
 
@@ -46,19 +45,17 @@ assets to the recovery partition:
 - `LiveOS/squashfs.img`, which contains the offline installer and OCI payload;
 - a checksum manifest for the copied boot files and squashfs image.
 
-The recovery kernel should mount the recovery partition read-only using
-Dracut's live-image support. The recovery system image also runs read-only;
-temporary writes must use a separate writable overlay or target-disk scratch.
-Its startup path should launch a Qt/QML factory-reset wizard and require
-confirmation before touching the installed system. The exact boot arguments
-and writable-space requirements remain to be validated.
+The recovery kernel mounts the recovery partition read-only using Dracut's
+live-image support. The recovery system image runs with a temporary writable
+overlay. Recovery mode launches the Qt/QML factory-reset wizard, which requires
+confirmation before invoking the reset helper. The boot arguments and mount
+behavior still need validation from a built ISO in a VM.
 
-The recovery boot entry must live outside the root filesystem being reset.
-The first boot-path spike should establish a GRUB entry that loads the recovery
-kernel and live image from `CUBE_RECOVERY`, and verify that the entry survives
-normal bootc updates and a root reinstall. The exact GRUB integration is still
-an implementation question; do not assume an entry stored only under `/boot`
-will survive formatting the root partition.
+The installer creates a separate UEFI entry pointing to a GRUB binary on the
+EFI System Partition. It loads `active.cfg` from `CUBE_RECOVERY`, selecting
+one of two self-contained slots. The installer, KDE Settings action, and reset
+flow all validate the recorded EFI, disk, root, and recovery partition IDs.
+This boot path still needs validation from a built ISO.
 
 The live image is larger than a purpose-built recovery OS, but this approach
 reuses the existing offline payload and installer runtime. It also gives the
@@ -82,7 +79,7 @@ smaller dedicated recovery image can follow after the reset flow works.
    cubelinux's first-boot setup.
 
 The root partition's GPT PARTUUID is the stable target identity across
-formatting. The staging job records the disk GUID and root/recovery PARTUUIDs
+formatting. The staging job records the disk GUID and root, recovery and EFI PARTUUIDs
 in a checksummed layout manifest. Reset must verify those identities and GPT
 partition labels, and fail closed if the expected layout is not present. Do
 not use `bootc install to-disk --wipe` for reset because it would erase the
@@ -100,31 +97,45 @@ Reset** section and a **Restart to Factory Reset** action. Explain that the user
 reset after reboot; restarting alone must not erase data. Show recovery as
 unavailable when no usable recovery installation or boot entry is present.
 
-The module should ask a privileged service to select the recovery boot entry
-for the next boot only and restart the machine. The service must validate the
-entry and report failures to the UI. Factory reset confirmation remains in
-the recovery environment. The boot mechanism and its one-time selection need
-to be established before this action can be implemented reliably. Recovery
-must also remain accessible from the boot menu if the installed OS cannot boot.
+The module invokes a privileged helper that selects the matching recovery
+entry for the next boot only and restarts the machine. Factory reset
+confirmation remains in the recovery environment. The entry is also added to
+the firmware boot menu. Both paths need VM validation.
 
-## Small implementation tasks
+## Recovery updates
 
-1. **Layout spike:** add the labeled ext4 recovery partition to the
-   Calamares whole-disk layout, measure the recovery bundle, and validate the
-   resulting partition table in a VM.
-2. **Boot spike:** populate the partition from the live ISO, boot it from the
-   installed system's startup menu, and verify the entry after a bootc update
-   and root reinstall.
-3. **Reset action:** add the confirmation UI and fail-closed reset helper;
-   format only `CUBE_ROOT` and reinstall the local payload.
-4. **Acceptance:** test normal boot, recovery boot with root unavailable,
-   offline reset, first-boot setup, and a second reset from the same recovery
-   partition.
-5. **Settings integration:** add the Reset System module and a privileged,
-   one-time recovery boot selection after the boot path is established.
-6. **OTA integration:** stage and verify a new recovery bundle during normal
-   system updates, and retain a bootable previous version until activation.
-   Measure bundle sizes and choose a partition capacity that supports this.
+The installed system has a timer that checks the booted bootc image identity,
+downloads that exact registry digest, rebuilds the recovery live image in the
+inactive slot, verifies the result and atomically switches `active.cfg`. It
+keeps the previously active slot during the operation. The updater uses
+temporary space on the system disk and needs network access while downloading;
+factory reset itself uses the staged offline image. This implementation has
+not yet been validated against a built ISO or an interrupted update. The
+prototype updates the reset payload, UI and helper scripts; it currently
+retains the recovery environment's original kernel, initramfs and base
+packages. It checks that the updated UI can load against that environment
+before switching slots.
+
+## Implementation status and VM validation
+
+The code is in place for installer partitioning and recovery staging, a
+dedicated UEFI boot entry, the Qt/QML confirmation and completion screens, the
+root-only reset backend, a KDE **Reset System** module, and a two-slot updater
+that pulls the booted image by digest and switches slots after verification.
+The recovery UI and helpers are shared from the `cubelinux` component; the
+installer owns disk layout and initial provisioning.
+
+The remaining work is runtime validation with the ISO and a VM. Check:
+
+1. Normal UEFI boot, installer preflight, and the Erase disk partition layout.
+2. Recovery slot contents and UEFI entry after installation.
+3. Recovery boot with the installed root unavailable, with the recovery
+   partition mounted read-only.
+4. Offline factory reset, first-boot setup, and a second reset using the same
+   recovery partition.
+5. KDE Settings status and privileged restart into recovery.
+6. Recovery update from a newer registry image, including interruption before
+   and after slot activation.
 
 The installer ISO creates the recovery partition. Existing installations
 without one require reinstalling; system updates do not create or resize disk
@@ -133,19 +144,21 @@ partitions. Updates only maintain recovery on installations that already have it
 ## Limits for the first version
 
 - The first layout targets the current single-root UEFI installation and
-  requires enough space for the 16 GiB recovery partition plus at least 40 GiB
+  requires enough space for the 32 GiB recovery partition plus at least 40 GiB
   for the root partition.
-- Calamares currently offers root encryption. Recovery must either unlock and
-  reformat an existing LUKS root safely or disable that option for
-  recovery-capable installs; the recovery partition itself stays unencrypted
-  so it remains bootable.
-- Erase, Replace, and Alongside recovery layouts need VM validation; the
-  selected target or Alongside free-space region must fit both partitions.
+- The installer temporarily hides Calamares root encryption because reset does
+  not yet preserve LUKS. The reset helper also refuses an encrypted root. The
+  recovery partition remains unencrypted so it can boot.
+- Only Erase disk is supported. Replace and Alongside may remain visible in
+  stock Calamares, but the installer rejects them before disk jobs run.
 - Recovery initially uses the payload shipped with that installer release.
-  Updating it alongside system OTA updates remains to be implemented; the
-  current 16 GiB proposal has not been shown to fit two bundles.
+  The update service and the two-slot layout need validation with actual
+  release bundles.
 - Recovery integrity checks detect accidental damage. A mutable ext4
   recovery partition is not a verified-boot security boundary.
+- The standalone recovery GRUB image is unsigned. Installation
+  stops before partitioning when UEFI Secure Boot is enabled, until a signed
+  recovery boot chain is provided.
 
 ## References
 

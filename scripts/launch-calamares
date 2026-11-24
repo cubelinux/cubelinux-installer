@@ -1,7 +1,15 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-/usr/local/libexec/cubelinux/validate-recovery-media
+recovery_mode=0
+preflight_error=
+preflight_failed=0
+case " $(</proc/cmdline) " in
+    *' cubelinux.recovery=1 '*) recovery_mode=1 ;;
+esac
+if (( ! recovery_mode )); then
+    preflight_error=$(/usr/local/libexec/cubelinux/validate-recovery-media 2>&1) || preflight_failed=1
+fi
 
 if [[ "${CUBELINUX_DBUS_SESSION:-0}" != 1 ]]; then
     export CUBELINUX_DBUS_SESSION=1
@@ -57,4 +65,10 @@ if [[ ! -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
     exit 1
 fi
 
-/usr/bin/calamares "$@"
+if (( recovery_mode )); then
+    /usr/local/libexec/cubelinux/recovery-ui
+elif [[ ${preflight_failed:-0} == 1 ]]; then
+    /usr/local/libexec/cubelinux/recovery-ui --installer-error "$preflight_error"
+else
+    /usr/bin/calamares "$@"
+fi

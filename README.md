@@ -13,9 +13,19 @@ user; the installed system should start Plasma Setup on first boot.
 
 The migration branch is Calamares-only: its package set and boot path no longer
 include Anaconda. The Phase 1 installer was built and successfully installed
-and booted by the maintainer. Phase 2 now reserves and populates a recovery
-partition; its boot entry and factory-reset action still need implementation
-and VM validation.
+and booted by the maintainer. The Phase 2 recovery implementation is present:
+the installer creates and provisions the recovery partition, while the
+`cubelinux` system image supplies the reset UI, KDE Settings module, backend,
+and OTA recovery updater. The complete recovery flow still needs ISO and VM
+validation before it can be considered usable.
+
+The recovery prototype requires x86-64 UEFI with Secure Boot disabled and a
+GPT disk large enough for a 32 GiB recovery partition and a 40 GiB root.
+Automated root encryption is temporarily disabled because factory reset does
+not yet preserve LUKS. Do not use this prototype on a disk with data you need.
+Choose **Erase disk** on the partition page. Stock Calamares may still display
+alongside and replace choices; these are rejected before any partition jobs run
+because they do not reliably create the recovery layout.
 
 The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
 required package dependencies from the pinned `eu.edge.kernel.org` Fedora
@@ -35,18 +45,18 @@ not make them available to the ISO build stages.
 ## Calamares migration
 
 Calamares is the only installer in this branch. Its custom partition layout
-reserves a 16 GiB ext4 `CUBE_RECOVERY` partition and assigns the remaining
+reserves a 32 GiB ext4 `CUBE_RECOVERY` partition and assigns the remaining
 space to the ext4 `CUBE_ROOT` partition. Before showing the installer, a size
 check confirms that the live kernel, initramfs, and SquashFS image fit in the
-recovery partition with 1 GiB free. During installation, a local job copies
+recovery partition's two slots. During installation, a local job copies
 those files and a checksum manifest to the recovery partition. The live
 SquashFS contains the release-matched offline OCI payload.
 
 The bootc deployment job imports the embedded OCI archive into Podman storage
 and runs the payload's bootc installer in a network-disabled container. It
 retains the configured registry reference as the installed system's update
-origin. Factory-reset boot selection and the reset action are the remaining
-recovery work.
+origin. Recovery boot selection and the reset action are implemented but have
+not yet been validated end to end.
 
 The ISO must stay small while preserving the embedded offline payload. Weak
 DNF dependencies are disabled, and the build record reports the final ISO and
@@ -58,6 +68,8 @@ Use a Fedora 44 x86_64 build host with rootful Podman and `image-builder`
 installed. The build needs root privileges for image-builder's loop devices
 and mounts.
 The cubelinux image must be published in a registry accessible to the builder.
+It must include the matching recovery component; build the updated system
+image before building this installer.
 
 Build using the exact image reference that the ISO should install:
 
@@ -117,10 +129,8 @@ cubelinux-installer/
 |-- scripts/
 |   |-- build-iso.sh             # Build installer image and ISO
 |   |-- launch-calamares         # Start the Calamares Wayland session
-|   |-- install-bootc            # Import and install/finalize the embedded OCI payload
 |   |-- stage-recovery           # Copy live boot assets onto the recovery partition
 |   |-- validate-recovery-media  # Check recovery bundle size before installation
-|   |-- cleanup-installed-fstab  # Remove the composefs root fstab entry
 |-- .gitignore
 |-- Containerfile                # Calamares live installer image
 `-- README.md

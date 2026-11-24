@@ -1,0 +1,6 @@
+---
+type: job
+name: cubelinux-erase-only
+interface: python
+script: main.py
+noconfig: true

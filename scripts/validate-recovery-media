@@ -1,8 +1,24 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-recovery_partition_bytes=$((16 * 1024 * 1024 * 1024))
-reserved_bytes=$((2 * 1024 * 1024 * 1024))
+[[ -d /sys/firmware/efi/efivars ]] || {
+    echo 'Recovery requires the installer to boot in UEFI mode.' >&2
+    exit 1
+}
+secure_boot=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+[[ -f "$secure_boot" ]] || {
+    echo 'Recovery setup could not determine the UEFI Secure Boot state.' >&2
+    exit 1
+}
+secure_boot_state=$(/usr/bin/od -An -j4 -N1 -t u1 -- "$secure_boot" | /usr/bin/tr -d '[:space:]')
+case "$secure_boot_state" in
+    0) ;;
+    1) echo 'Recovery boot is not yet signed for Secure Boot. Disable Secure Boot to install this recovery prototype.' >&2; exit 1 ;;
+    *) echo 'Recovery setup could not determine the UEFI Secure Boot state.' >&2; exit 1 ;;
+esac
+
+# Each slot is limited to 14 GiB, leaving room for two bundles and ext4 reserve.
+maximum_bundle_bytes=$((14 * 1024 * 1024 * 1024))
 
 find_live_media_root() {
     local candidate
@@ -47,10 +63,9 @@ for source in \
     bundle_bytes=$((bundle_bytes + bytes))
 done
 
-maximum_bundle_bytes=$((recovery_partition_bytes - reserved_bytes))
 (( bundle_bytes <= maximum_bundle_bytes )) || {
-    echo "Recovery media is too large for the 16 GiB partition (bundle: ${bundle_bytes} bytes; maximum: ${maximum_bundle_bytes}, including ext4 reserve and 1 GiB working space)." >&2
+    echo "Recovery bundle exceeds the 14 GiB slot limit (bundle: ${bundle_bytes} bytes; maximum: ${maximum_bundle_bytes})." >&2
     exit 1
 }
 
-echo "Recovery media fits the 16 GiB partition (${bundle_bytes} bytes; ext4 reserve and working space reserved)."
+echo "Recovery media fits the 32 GiB partition's two-slot layout (${bundle_bytes} bytes per bundle)."

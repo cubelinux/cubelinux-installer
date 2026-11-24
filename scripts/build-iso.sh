@@ -8,9 +8,15 @@ REFRESH_IMAGE="${CUBELINUX_REFRESH_IMAGE:-0}"
 COMMIT_REF="${GITHUB_SHA:-local}"
 INSTALLER_REF="localhost/cubelinux-installer:local"
 PAYLOAD_ARCHIVE="$ROOT/output/cubelinux-payload.oci.tar"
+RECOVERY_APP_DIR="$ROOT/output/recovery-app"
+RECOVERY_EXTRACT_CONTAINER=
 PAYLOAD_SIZE_BYTES=0
 
 cleanup() {
+    if [[ -n "$RECOVERY_EXTRACT_CONTAINER" ]]; then
+        podman rm --force "$RECOVERY_EXTRACT_CONTAINER" >/dev/null 2>&1 || true
+    fi
+    rm -rf -- "$RECOVERY_APP_DIR"
     rm -f "$PAYLOAD_ARCHIVE"
     if [[ "${CUBELINUX_CI_PRUNE:-}" == "1" ]]; then
         podman system prune --all --force --volumes >/dev/null 2>&1 || true
@@ -43,6 +49,31 @@ if [[ "$REFRESH_IMAGE" == "1" ]] || ! podman image exists "$IMAGE_REF"; then
 else
     printf 'Using cached image %s (set CUBELINUX_REFRESH_IMAGE=1 to pull it again)\n' "$IMAGE_REF"
 fi
+rm -rf -- "$RECOVERY_APP_DIR"
+mkdir -p "$RECOVERY_APP_DIR"
+RECOVERY_EXTRACT_CONTAINER="$(podman create "$IMAGE_REF")"
+if ! podman cp "$RECOVERY_EXTRACT_CONTAINER:/usr/lib/cubelinux-recovery/." "$RECOVERY_APP_DIR/"; then
+    echo "The selected cubelinux image does not include recovery. Build the updated system image first and set CUBELINUX_IMAGE_REF to that image." >&2
+    exit 1
+fi
+podman rm "$RECOVERY_EXTRACT_CONTAINER" >/dev/null
+RECOVERY_EXTRACT_CONTAINER=
+for file in qml/Main.qml qml/InstallerError.qml recovery-ui; do
+    if [[ ! -s "$RECOVERY_APP_DIR/$file" ]]; then
+        echo "The selected cubelinux image is missing recovery component file: $file" >&2
+        exit 1
+    fi
+done
+if [[ ! -x "$RECOVERY_APP_DIR/recovery-ui" ]]; then
+    echo 'The recovery UI in the selected cubelinux image is not executable.' >&2
+    exit 1
+fi
+for helper in install-bootc cleanup-installed-fstab verify-recovery-bundle check-recovery-layout factory-reset install-recovery-boot; do
+    if [[ ! -s "$RECOVERY_APP_DIR/runtime/$helper" ]]; then
+        echo "The selected cubelinux image is missing recovery runtime helper: $helper" >&2
+        exit 1
+    fi
+done
 skopeo copy "containers-storage:$IMAGE_REF" \
     "oci-archive:$PAYLOAD_ARCHIVE:localhost/cubelinux-offline:payload"
 PAYLOAD_SIZE_BYTES="$(stat -c '%s' "$PAYLOAD_ARCHIVE")"
