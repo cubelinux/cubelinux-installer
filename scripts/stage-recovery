@@ -116,6 +116,23 @@ live_media_root=$(find_live_media_root) ||
     fail 'the live installer does not contain the offline OCI payload'
 [[ -s /usr/share/cubelinux/target-image-ref ]] ||
     fail 'the live installer does not contain its target image reference'
+[[ -x /usr/lib/cubelinux-recovery/recovery-ui && \
+   ! -L /usr/lib/cubelinux-recovery/recovery-ui && \
+   -d /usr/lib/cubelinux-recovery/qml && \
+   -d /usr/lib/cubelinux-recovery/runtime ]] ||
+    fail 'the live installer does not contain the recovery runtime component'
+for required in \
+    /usr/lib/cubelinux-recovery/qml/Main.qml \
+    /usr/lib/cubelinux-recovery/qml/InstallerError.qml \
+    /usr/lib/cubelinux-recovery/runtime/check-recovery-layout \
+    /usr/lib/cubelinux-recovery/runtime/cleanup-installed-fstab \
+    /usr/lib/cubelinux-recovery/runtime/factory-reset \
+    /usr/lib/cubelinux-recovery/runtime/install-bootc \
+    /usr/lib/cubelinux-recovery/runtime/install-recovery-boot \
+    /usr/lib/cubelinux-recovery/runtime/verify-recovery-bundle; do
+    [[ -f "$required" && ! -L "$required" ]] ||
+        fail "recovery runtime component is missing or unsafe: $required"
+done
 
 /usr/bin/install -d -m 0755 "$recovery_mount"
 if /usr/bin/mountpoint --quiet "$recovery_mount"; then
@@ -147,11 +164,14 @@ for source in \
 done
 maximum_bundle_bytes=$((14 * 1024 * 1024 * 1024))
 (( bundle_bytes <= maximum_bundle_bytes )) ||
-    fail "recovery bundle exceeds the 14 GiB slot limit (${bundle_bytes} bytes)"
+    fail "offline recovery image exceeds the 14 GiB limit (${bundle_bytes} bytes)"
 available_bytes=$(/usr/bin/df --block-size=1 --output=avail -- "$recovery_mount" |
     /usr/bin/tail -n 1 | /usr/bin/tr -d '[:space:]')
 [[ "$available_bytes" =~ ^[0-9]+$ ]] || fail 'could not measure recovery partition free space'
-required_bytes=$((bundle_bytes * 2 + minimum_free_bytes))
+runtime_bytes=$(/usr/bin/du --summarize --block-size=1 -- /usr/lib/cubelinux-recovery/recovery-ui \
+    /usr/lib/cubelinux-recovery/qml /usr/lib/cubelinux-recovery/runtime | \
+    /usr/bin/awk '{ total += $1 } END { print total+0 }')
+required_bytes=$((bundle_bytes + runtime_bytes + minimum_free_bytes))
 (( available_bytes >= required_bytes )) ||
     fail "recovery partition is too small (need ${required_bytes} bytes; have ${available_bytes})"
 
@@ -160,6 +180,45 @@ slot="$recovery_mount/slots/A"
 /usr/bin/cp --reflink=auto -- "$live_media_root/LiveOS/squashfs.img" "$slot/LiveOS/squashfs.img"
 /usr/bin/cp --reflink=auto -- "$live_media_root/images/pxeboot/vmlinuz" "$slot/boot/vmlinuz"
 /usr/bin/cp --reflink=auto -- "$live_media_root/images/pxeboot/initrd.img" "$slot/boot/initrd.img"
+
+runtime_slot="$recovery_mount/runtime/A"
+runtime_root="$runtime_slot/rootfs"
+if /usr/bin/find /usr/lib/cubelinux-recovery/qml /usr/lib/cubelinux-recovery/runtime \
+    -type l -print -quit | /usr/bin/grep -q .; then
+    fail 'recovery runtime component contains a symlink'
+fi
+/usr/bin/install -d -m 0755 \
+    "$runtime_root/usr/local/libexec/cubelinux" \
+    "$runtime_root/usr/lib/cubelinux-recovery/qml"
+/usr/bin/install -m 0755 /usr/lib/cubelinux-recovery/recovery-ui \
+    "$runtime_root/usr/local/libexec/cubelinux/recovery-ui"
+while IFS= read -r -d '' source; do
+    relative=${source#/usr/lib/cubelinux-recovery/runtime/}
+    [[ "$relative" =~ ^[A-Za-z0-9._/-]+$ && "$relative" != *..* ]] ||
+        fail "unsafe recovery helper path: $relative"
+    /usr/bin/install -D -m 0755 -- "$source" "$runtime_root/usr/local/libexec/cubelinux/$relative"
+done < <(/usr/bin/find /usr/lib/cubelinux-recovery/runtime -type f -print0)
+while IFS= read -r -d '' source; do
+    relative=${source#/usr/lib/cubelinux-recovery/qml/}
+    [[ "$relative" =~ ^[A-Za-z0-9._/-]+$ && "$relative" != *..* ]] ||
+        fail "unsafe recovery QML path: $relative"
+    /usr/bin/install -D -m 0644 -- "$source" "$runtime_root/usr/lib/cubelinux-recovery/qml/$relative"
+done < <(/usr/bin/find /usr/lib/cubelinux-recovery/qml -type f -print0)
+(
+    cd "$runtime_root"
+    while IFS= read -r name; do
+        /usr/bin/sha256sum -- "$name"
+    done < <(/usr/bin/find usr -type f -printf '%P\n' | LC_ALL=C /usr/bin/sort)
+) > "$runtime_slot/SHA256SUMS"
+(cd "$runtime_root" && /usr/bin/sha256sum --check --strict "$runtime_slot/SHA256SUMS" >/dev/null) ||
+    fail 'recovery runtime checksum verification failed'
+runtime_manifest_digest=$(/usr/bin/sha256sum "$runtime_slot/SHA256SUMS")
+runtime_manifest_digest=${runtime_manifest_digest%% *}
+{
+    printf 'format=1\n'
+    printf 'manifest_sha256=%s\n' "$runtime_manifest_digest"
+} > "$runtime_slot/CUBELINUX_RECOVERY_RUNTIME"
+
 /usr/bin/install -m 0644 /usr/share/cubelinux/target-image-ref "$slot/CUBELINUX_IMAGE_REF"
 {
     printf 'format=1\n'
@@ -181,10 +240,11 @@ slot="$recovery_mount/slots/A"
 /usr/local/libexec/cubelinux/verify-recovery-bundle "$slot"
 {
     printf 'set recovery_slot=A\n'
-    printf 'linux ($recovery)/slots/A/boot/vmlinuz root=live:PARTUUID=%s ro rd.live.image rd.live.dir=/slots/A/LiveOS rd.live.overlay.overlayfs=1 cubelinux.recovery=1 cubelinux.recovery_slot=A console=tty0\n' "$recovery_partuuid"
+    printf 'set recovery_runtime_slot=A\n'
+    printf 'linux ($recovery)/slots/A/boot/vmlinuz root=live:PARTUUID=%s ro rd.live.image rd.live.dir=/slots/A/LiveOS rd.live.overlay.overlayfs=1 cubelinux.recovery=1 cubelinux.recovery_slot=A cubelinux.recovery_runtime_slot=A console=tty0\n' "$recovery_partuuid"
     printf 'initrd ($recovery)/slots/A/boot/initrd.img\nboot\n'
 } > "$recovery_mount/active.cfg"
 /usr/bin/sync --file-system "$recovery_mount"
 /usr/bin/umount "$recovery_mount" || fail "could not unmount staged recovery partition $recovery_device"
 recovery_mounted=0
-echo "Staged offline recovery system on $recovery_device (${bundle_bytes} bytes, image $(</usr/share/cubelinux/target-image-ref))."
+echo "Staged the offline factory-reset image and recovery runtime on $recovery_device (${bundle_bytes} byte base image, $(</usr/share/cubelinux/target-image-ref))."

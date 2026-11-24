@@ -8,7 +8,7 @@ set -euo pipefail
 # The Fedora-signed ISO and the recovery path use Fedora's signed shim/GRUB
 # chain. Secure Boot must not block starting Calamares.
 
-# Each slot is limited to 14 GiB, leaving room for two bundles and ext4 reserve.
+# Keep the one ISO-provisioned offline reset image below the conservative limit.
 maximum_bundle_bytes=$((14 * 1024 * 1024 * 1024))
 
 find_live_media_root() {
@@ -44,6 +44,27 @@ live_media_root=$(find_live_media_root) || {
     echo 'Recovery media check failed: target image reference is missing.' >&2
     exit 1
 }
+[[ -x /usr/lib/cubelinux-recovery/recovery-ui && \
+   ! -L /usr/lib/cubelinux-recovery/recovery-ui && \
+   -d /usr/lib/cubelinux-recovery/qml && \
+   -d /usr/lib/cubelinux-recovery/runtime ]] || {
+    echo 'Recovery media check failed: recovery runtime component is missing.' >&2
+    exit 1
+}
+for required in \
+    /usr/lib/cubelinux-recovery/qml/Main.qml \
+    /usr/lib/cubelinux-recovery/qml/InstallerError.qml \
+    /usr/lib/cubelinux-recovery/runtime/check-recovery-layout \
+    /usr/lib/cubelinux-recovery/runtime/cleanup-installed-fstab \
+    /usr/lib/cubelinux-recovery/runtime/factory-reset \
+    /usr/lib/cubelinux-recovery/runtime/install-bootc \
+    /usr/lib/cubelinux-recovery/runtime/install-recovery-boot \
+    /usr/lib/cubelinux-recovery/runtime/verify-recovery-bundle; do
+    [[ -f "$required" && ! -L "$required" ]] || {
+        echo "Recovery media check failed: runtime file is missing or unsafe: $required" >&2
+        exit 1
+    }
+done
 
 bundle_bytes=0
 for source in \
@@ -55,8 +76,8 @@ for source in \
 done
 
 (( bundle_bytes <= maximum_bundle_bytes )) || {
-    echo "Recovery bundle exceeds the 14 GiB slot limit (bundle: ${bundle_bytes} bytes; maximum: ${maximum_bundle_bytes})." >&2
+    echo "Offline recovery image exceeds the 14 GiB limit (bundle: ${bundle_bytes} bytes; maximum: ${maximum_bundle_bytes})." >&2
     exit 1
 }
 
-echo "Recovery media fits the 32 GiB partition's two-slot layout (${bundle_bytes} bytes per bundle)."
+echo "Recovery media fits the 32 GiB partition with one offline reset image and small A/B runtime slots (${bundle_bytes} bytes for the reset image)."

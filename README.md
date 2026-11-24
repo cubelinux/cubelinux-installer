@@ -16,8 +16,8 @@ include Anaconda. The Phase 1 installer was built and successfully installed
 and booted by the maintainer. The Phase 2 recovery implementation is present:
 the installer creates and provisions the recovery partition, while the
 `cubelinux` system image supplies the reset UI, KDE Settings module, backend,
-and OTA recovery updater. The complete recovery flow still needs ISO and VM
-validation before it can be considered usable.
+and OTA recovery runtime updater. The complete recovery flow still needs ISO
+and VM validation before it can be considered usable.
 
 The Fedora-signed installer ISO and the recovery boot entry use Fedora's
 signed shim and GRUB. Secure Boot does not block starting Calamares or using
@@ -51,9 +51,45 @@ Calamares is the only installer in this branch. Its custom partition layout
 reserves a 32 GiB ext4 `CUBE_RECOVERY` partition and assigns the remaining
 space to the ext4 `CUBE_ROOT` partition. Before showing the installer, a size
 check confirms that the live kernel, initramfs, and SquashFS image fit in the
-recovery partition's two slots. During installation, a local job copies
-those files and a checksum manifest to the recovery partition. The live
-SquashFS contains the release-matched offline OCI payload.
+single offline factory-reset image. During installation, a local job copies
+those files and a checksum manifest to the recovery partition, then seeds a
+small recovery UI and helper runtime in slot A. The live SquashFS contains the
+release snapshot of the offline OCI payload.
+
+OS updates copy only the recovery UI, QML files, and reset helpers into the
+inactive small runtime slot. After checksums pass, the updater switches the
+runtime selector while leaving the ISO-provisioned boot image and reset payload
+untouched. This update uses files already present in the installed image; it
+does not download an image or rebuild SquashFS. Factory Reset remains offline
+and reinstalls the image snapshot from the ISO used for installation.
+
+### Factory-reset flow
+
+1. Calamares provisions `CUBE_RECOVERY` as part of a fresh Erase disk install
+   and stages the ISO's recovery boot files, offline payload, and initial UI.
+2. In KDE System Settings, the user opens **Reset System** and chooses
+   **Restart to Factory Reset**. This schedules recovery for the next boot; it
+   does not erase data.
+3. The machine boots the recovery environment through Fedora's signed shim and
+   GRUB. The recovery filesystem and selected runtime overlay are mounted
+   read-only. A temporary live overlay holds session changes.
+4. The user confirms **Factory Reset** in the Qt wizard. The reset helper
+   formats only `CUBE_ROOT`, deploys the ISO's local OCI payload offline,
+   preserves EFI and recovery, and reboots to first-boot account setup.
+
+The two A/B slots are for recovery code updates, not full OS images. The
+updater copies the currently installed recovery component, verifies its
+manifest, checks that the UI loads against the recovery environment's Qt and
+system libraries, then switches the active slot. If verification fails at
+boot, the ISO-embedded UI and helpers remain the fallback. Updating this code
+does not update the offline OS payload used by Factory Reset; a newer reset
+payload requires a newer ISO or a separately designed payload update.
+
+This layout currently targets UEFI/GPT Erase disk installs with an unencrypted
+ext4 root and reserves 32 GiB for recovery. Existing installations without a
+recovery partition need reinstalling; OS updates do not repartition disks. See
+[`docs/recovery-partition-design.md`](docs/recovery-partition-design.md) for
+the complete layout, flow, and validation notes.
 
 The bootc deployment job imports the embedded OCI archive into Podman storage
 and runs the payload's bootc installer in a network-disabled container. It

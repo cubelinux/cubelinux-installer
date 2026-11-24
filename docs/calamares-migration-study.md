@@ -160,8 +160,9 @@ in [recovery-partition-design.md](recovery-partition-design.md).
    `CUBE_RECOVERY` and `CUBE_ROOT` ext4 partitions and copies the release's live
    kernel, initramfs, SquashFS image, and checksum manifest to recovery. Bundle
    capacity and partition layout still need VM validation.
-2. **Recovery boot path:** an EFI entry and a two-slot boot selector are
-   implemented. Verify they survive bootc updates and root reinstalls.
+2. **Recovery boot path:** an EFI entry selects the ISO-provisioned recovery
+   boot image and an independently updated A/B runtime overlay. Verify they
+   survive bootc updates and root reinstalls.
 3. **One-action reset flow:** the current helper checks payload and partition IDs
    before formatting; reinstall only OS and writable data partitions; retain
    recovery; reboot into first-boot account setup. Use

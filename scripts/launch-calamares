@@ -60,7 +60,137 @@ if [[ ! -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
     exit 1
 fi
 
+verify_recovery_runtime() {
+    local root=$1 manifest metadata_digest actual line relative directory path
+    local -a metadata=()
+    local -A seen=()
+    manifest="$root/SHA256SUMS"
+    [[ -d "$root/rootfs" && ! -L "$root/rootfs" && -f "$manifest" && ! -L "$manifest" && \
+       -f "$root/CUBELINUX_RECOVERY_RUNTIME" && ! -L "$root/CUBELINUX_RECOVERY_RUNTIME" ]] || return 1
+
+    mapfile -t metadata < "$root/CUBELINUX_RECOVERY_RUNTIME"
+    (( ${#metadata[@]} == 2 )) && [[ "${metadata[0]}" == format=1 && \
+        "${metadata[1]}" =~ ^manifest_sha256=([[:xdigit:]]{64})$ ]] || return 1
+    metadata_digest=${BASH_REMATCH[1],,}
+    actual=$(/usr/bin/sha256sum -- "$manifest") || return 1
+    [[ "${actual%% *}" == "$metadata_digest" ]] || return 1
+
+    for directory in \
+        "$root/rootfs/usr" \
+        "$root/rootfs/usr/local" \
+        "$root/rootfs/usr/local/libexec" \
+        "$root/rootfs/usr/local/libexec/cubelinux" \
+        "$root/rootfs/usr/lib" \
+        "$root/rootfs/usr/lib/cubelinux-recovery" \
+        "$root/rootfs/usr/lib/cubelinux-recovery/qml"; do
+        [[ -d "$directory" && ! -L "$directory" ]] || return 1
+    done
+    if /usr/bin/find "$root/rootfs" -type l -print -quit | /usr/bin/grep -q .; then
+        return 1
+    fi
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^[[:xdigit:]]{64}[[:space:]][[:space:]]([A-Za-z0-9._/-]+)$ ]] || return 1
+        relative=${BASH_REMATCH[1]}
+        [[ "$relative" != *..* ]] || return 1
+        case "$relative" in
+            usr/local/libexec/cubelinux/*|usr/lib/cubelinux-recovery/qml/*) ;;
+            *) return 1 ;;
+        esac
+        [[ -z "${seen[$relative]+present}" ]] || return 1
+        [[ -f "$root/rootfs/$relative" && ! -L "$root/rootfs/$relative" ]] || return 1
+        seen[$relative]=1
+    done < "$manifest"
+
+    for relative in \
+        usr/lib/cubelinux-recovery/qml/InstallerError.qml \
+        usr/lib/cubelinux-recovery/qml/Main.qml \
+        usr/local/libexec/cubelinux/check-recovery-layout \
+        usr/local/libexec/cubelinux/cleanup-installed-fstab \
+        usr/local/libexec/cubelinux/factory-reset \
+        usr/local/libexec/cubelinux/install-bootc \
+        usr/local/libexec/cubelinux/install-recovery-boot \
+        usr/local/libexec/cubelinux/recovery-ui \
+        usr/local/libexec/cubelinux/verify-recovery-bundle; do
+        [[ -n "${seen[$relative]+present}" ]] || return 1
+    done
+    for relative in \
+        usr/local/libexec/cubelinux/check-recovery-layout \
+        usr/local/libexec/cubelinux/cleanup-installed-fstab \
+        usr/local/libexec/cubelinux/factory-reset \
+        usr/local/libexec/cubelinux/install-bootc \
+        usr/local/libexec/cubelinux/install-recovery-boot \
+        usr/local/libexec/cubelinux/recovery-ui \
+        usr/local/libexec/cubelinux/verify-recovery-bundle; do
+        [[ -x "$root/rootfs/$relative" ]] || return 1
+    done
+    while IFS= read -r path; do
+        relative=${path#"$root/rootfs/"}
+        [[ -n "${seen[$relative]+present}" ]] || return 1
+    done < <(/usr/bin/find "$root/rootfs" -type f -print)
+    (cd "$root/rootfs" && /usr/bin/sha256sum --check --strict SHA256SUMS >/dev/null) || return 1
+}
+
+activate_recovery_runtime() {
+    local slot=$1 root="/run/initramfs/live/runtime/$1" check_dir check_binary
+    verify_recovery_runtime "$root" || return 1
+
+    if ! /usr/bin/mount --bind "$root/rootfs/usr/lib/cubelinux-recovery/qml" \
+        /usr/lib/cubelinux-recovery/qml; then
+        return 1
+    fi
+    if ! /usr/bin/mount -o remount,bind,ro,noexec \
+        "$root/rootfs/usr/lib/cubelinux-recovery/qml" /usr/lib/cubelinux-recovery/qml; then
+        /usr/bin/umount /usr/lib/cubelinux-recovery/qml || true
+        return 1
+    fi
+
+    check_dir=$(/usr/bin/mktemp -d /run/cubelinux-recovery-check.XXXXXX) || {
+        /usr/bin/umount /usr/lib/cubelinux-recovery/qml || true
+        return 1
+    }
+    check_binary="$check_dir/recovery-ui"
+    if ! /usr/bin/install -m 0755 \
+        "$root/rootfs/usr/local/libexec/cubelinux/recovery-ui" "$check_binary" || \
+       ! /usr/bin/env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+        XDG_CACHE_HOME="$check_dir/cache" "$check_binary" --check-qml; then
+        /usr/bin/rm -rf -- "$check_dir" || true
+        /usr/bin/umount /usr/lib/cubelinux-recovery/qml || true
+        return 1
+    fi
+    /usr/bin/rm -rf -- "$check_dir" || true
+
+    if ! /usr/bin/mount --bind "$root/rootfs/usr/local/libexec/cubelinux" \
+        /usr/local/libexec/cubelinux; then
+        /usr/bin/umount /usr/lib/cubelinux-recovery/qml || true
+        return 1
+    fi
+    if ! /usr/bin/mount -o remount,bind,ro,exec \
+        "$root/rootfs/usr/local/libexec/cubelinux" /usr/local/libexec/cubelinux; then
+        /usr/bin/umount /usr/local/libexec/cubelinux || true
+        /usr/bin/umount /usr/lib/cubelinux-recovery/qml || true
+        return 1
+    fi
+}
+
 if (( recovery_mode )); then
+    runtime_slot=
+    runtime_slot_count=0
+    for token in $(</proc/cmdline); do
+        case "$token" in
+            cubelinux.recovery_runtime_slot=*)
+                runtime_slot=${token#*=}
+                ((runtime_slot_count += 1))
+                ;;
+        esac
+    done
+    if (( runtime_slot_count == 1 )) && [[ "$runtime_slot" == A || "$runtime_slot" == B ]]; then
+        if ! activate_recovery_runtime "$runtime_slot"; then
+            echo "Recovery runtime slot $runtime_slot failed verification; using the embedded recovery app." >&2
+        fi
+    elif (( runtime_slot_count != 0 )); then
+        echo 'Recovery runtime selector is invalid; using the embedded recovery app.' >&2
+    fi
     /usr/local/libexec/cubelinux/recovery-ui
 else
     /usr/bin/calamares "$@"

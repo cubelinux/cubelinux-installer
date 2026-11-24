@@ -25,9 +25,10 @@ existing EFI System Partition and the recovery partition are preserved during
 factory reset. The root partition contains the OS and all mutable system and
 user data in the current layout, so formatting it resets the machine's state.
 
-The recovery partition is 32 GiB. The installer limits each bundle to
-14 GiB and reserves space for a second slot, ext4 reserve and working space.
-The staging job checks available space again before copying the first slot.
+The recovery partition is 32 GiB. The installer limits the one static boot and
+reset bundle to 14 GiB, then keeps at least 1 GiB free after staging. Two small
+A/B runtime slots hold only the recovery UI, QML files, and reset helpers.
+The staging job checks available space before copying the bundle and runtime.
 
 Calamares' custom `partitionLayout` provisions this layout for Erase disk.
 Erase is selected by default. Stock Calamares may still display Replace or
@@ -54,8 +55,9 @@ behavior still need validation from a built ISO in a VM.
 The installer creates a separate UEFI entry pointing to Fedora's signed shim
 on the EFI System Partition and copies the matching signed Fedora GRUB beside
 it. GRUB loads its per-entry configuration from the recovery EFI directory,
-then loads `active.cfg` from `CUBE_RECOVERY` to select one of two self-contained
-slots. The installer, KDE Settings action, reset flow, and OTA updater validate
+then loads `active.cfg` from `CUBE_RECOVERY`. It selects the static boot bundle
+in `slots/A` and one of two small runtime overlays in `runtime/A` or
+`runtime/B`. The installer, KDE Settings action, reset flow, and OTA updater validate
 the recorded EFI, disk, root, and recovery partition IDs and keep the copied
 Fedora loader synchronized with `EFI/fedora`. The boot path still needs Secure
 Boot VM validation.
@@ -107,26 +109,31 @@ the firmware boot menu. Both paths need VM validation.
 
 ## Recovery updates
 
-The installed system has a timer that checks the booted bootc image identity,
-downloads that exact registry digest, rebuilds the recovery live image in the
-inactive slot, verifies the result and atomically switches `active.cfg`. It
-keeps the previously active slot during the operation. The updater uses
-temporary space on the system disk and needs network access while downloading;
-factory reset itself uses the staged offline image. This implementation has
-not yet been validated against a built ISO or an interrupted update. The
-prototype updates the reset payload, UI and helper scripts; it currently
-retains the recovery environment's original kernel, initramfs and base
-packages. It checks that the updated UI can load against that environment
-before switching slots.
+The installed system has a timer that copies the already-deployed recovery UI,
+QML files, and reset helpers into the inactive runtime slot. It verifies the
+files and manifest, syncs them, then atomically switches the runtime selector
+in `active.cfg`. The previous runtime slot remains bootable until activation.
+The update needs neither network access nor large temporary storage because it
+does not fetch the OS image, unpack SquashFS, or rebuild the reset payload.
+
+The static recovery kernel, initramfs, and offline reset payload remain the
+snapshot provisioned by the installation ISO. An OS update can update the
+recovery interface and reset implementation without replacing that snapshot.
+Factory Reset therefore continues to reinstall the ISO's local image payload;
+shipping a newer reset OS payload requires a newer ISO or a separate payload
+update design. Recovery runtime updates must remain compatible with the Qt and
+system libraries in the static recovery environment. At recovery boot, the
+launcher verifies the overlay and checks that its UI can load with those
+libraries; if either check fails, it falls back to the embedded recovery app.
 
 ## Implementation status and VM validation
 
 The code is in place for installer partitioning and recovery staging, a
 dedicated UEFI boot entry, the Qt/QML confirmation and completion screens, the
-root-only reset backend, a KDE **Reset System** module, and a two-slot updater
-that pulls the booted image by digest and switches slots after verification.
-The recovery UI and helpers are shared from the `cubelinux` component; the
-installer owns disk layout and initial provisioning.
+root-only reset backend, a KDE **Reset System** module, and an A/B runtime
+updater that copies only the recovery component from the installed image. The
+recovery UI and helpers are shared from the `cubelinux` component; the installer
+owns disk layout and initial provisioning.
 
 The remaining work is runtime validation with the ISO and a VM. Check:
 
@@ -137,8 +144,8 @@ The remaining work is runtime validation with the ISO and a VM. Check:
 4. Offline factory reset, first-boot setup, and a second reset using the same
    recovery partition.
 5. KDE Settings status and privileged restart into recovery.
-6. Recovery update from a newer registry image, including interruption before
-   and after slot activation.
+6. Recovery runtime update from a newer installed image, including offline
+   update and interruption before and after runtime-slot activation.
 
 The installer ISO creates the recovery partition. Existing installations
 without one require reinstalling; system updates do not create or resize disk
@@ -154,9 +161,9 @@ partitions. Updates only maintain recovery on installations that already have it
   recovery partition remains unencrypted so it can boot.
 - Only Erase disk is supported. Replace and Alongside may remain visible in
   stock Calamares, but the installer rejects them before disk jobs run.
-- Recovery initially uses the payload shipped with that installer release.
-  The update service and the two-slot layout need validation with actual
-  release bundles.
+- Factory Reset initially uses the payload shipped with that installer
+  release. The small runtime overlay updates independently; both paths need
+  validation with actual release bundles.
 - GRUB and the Fedora kernel are launched through Fedora's signed shim/GRUB
   chain. The external initramfs and mutable ext4 recovery payload are checked
   for accidental damage but are not a verified-boot security boundary.
