@@ -51,11 +51,14 @@ overlay. Recovery mode launches the Qt/QML factory-reset wizard, which requires
 confirmation before invoking the reset helper. The boot arguments and mount
 behavior still need validation from a built ISO in a VM.
 
-The installer creates a separate UEFI entry pointing to a GRUB binary on the
-EFI System Partition. It loads `active.cfg` from `CUBE_RECOVERY`, selecting
-one of two self-contained slots. The installer, KDE Settings action, and reset
-flow all validate the recorded EFI, disk, root, and recovery partition IDs.
-This boot path still needs validation from a built ISO.
+The installer creates a separate UEFI entry pointing to Fedora's signed shim
+on the EFI System Partition and copies the matching signed Fedora GRUB beside
+it. GRUB loads its per-entry configuration from the recovery EFI directory,
+then loads `active.cfg` from `CUBE_RECOVERY` to select one of two self-contained
+slots. The installer, KDE Settings action, reset flow, and OTA updater validate
+the recorded EFI, disk, root, and recovery partition IDs and keep the copied
+Fedora loader synchronized with `EFI/fedora`. The boot path still needs Secure
+Boot VM validation.
 
 The live image is larger than a purpose-built recovery OS, but this approach
 reuses the existing offline payload and installer runtime. It also gives the
@@ -154,11 +157,12 @@ partitions. Updates only maintain recovery on installations that already have it
 - Recovery initially uses the payload shipped with that installer release.
   The update service and the two-slot layout need validation with actual
   release bundles.
-- Recovery integrity checks detect accidental damage. A mutable ext4
-  recovery partition is not a verified-boot security boundary.
-- The standalone recovery GRUB image is unsigned. Secure Boot does not block
-  starting Calamares or installing the normal OS, but factory recovery cannot
-  boot until a signed recovery boot chain is provided.
+- GRUB and the Fedora kernel are launched through Fedora's signed shim/GRUB
+  chain. The external initramfs and mutable ext4 recovery payload are checked
+  for accidental damage but are not a verified-boot security boundary.
+- Secure Boot permits both normal installation and recovery boot without
+  enrolling a CubeLinux signing key, provided the machine trusts the Fedora
+  shim already used by the installer.
 
 ## References
 

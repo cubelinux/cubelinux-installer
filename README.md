@@ -19,11 +19,11 @@ the installer creates and provisions the recovery partition, while the
 and OTA recovery updater. The complete recovery flow still needs ISO and VM
 validation before it can be considered usable.
 
-The Fedora-signed installer ISO can boot with Secure Boot enabled, and this no
-longer blocks starting Calamares. The current recovery bootloader is unsigned,
-so factory reset remains unavailable while Secure Boot is enabled. The
-prototype requires x86-64 UEFI and a GPT disk large enough for a 32 GiB recovery
-partition and a 40 GiB root.
+The Fedora-signed installer ISO and the recovery boot entry use Fedora's
+signed shim and GRUB. Secure Boot does not block starting Calamares or using
+factory recovery. Recovery boot files are refreshed from Fedora's installed
+EFI loader during recovery updates. The prototype requires x86-64 UEFI and a
+GPT disk large enough for a 32 GiB recovery partition and a 40 GiB root.
 Automated root encryption is temporarily disabled because factory reset does
 not yet preserve LUKS. Do not use this prototype on a disk with data you need.
 Choose **Erase disk** on the partition page. Stock Calamares may still display

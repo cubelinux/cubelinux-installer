@@ -5,9 +5,8 @@ set -euo pipefail
     echo 'Recovery requires the installer to boot in UEFI mode.' >&2
     exit 1
 }
-# The Fedora-signed ISO can start Calamares with Secure Boot enabled. The
-# separate recovery GRUB image is unsigned, so Secure Boot limits recovery
-# boot only; it must not block installing the normal OS.
+# The Fedora-signed ISO and the recovery path use Fedora's signed shim/GRUB
+# chain. Secure Boot must not block starting Calamares.
 
 # Each slot is limited to 14 GiB, leaving room for two bundles and ext4 reserve.
 maximum_bundle_bytes=$((14 * 1024 * 1024 * 1024))
