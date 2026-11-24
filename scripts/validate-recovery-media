@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+recovery_partition_bytes=$((16 * 1024 * 1024 * 1024))
+reserved_bytes=$((2 * 1024 * 1024 * 1024))
+
+find_live_media_root() {
+    local candidate
+    local -a candidates=(/run/initramfs/live /run/install/repo)
+
+    while IFS= read -r candidate; do
+        candidates+=("$candidate")
+    done < <(/usr/bin/findmnt --raw --noheadings --output TARGET)
+
+    for candidate in "${candidates[@]}"; do
+        if [[ -s "$candidate/LiveOS/squashfs.img" && \
+              -s "$candidate/images/pxeboot/vmlinuz" && \
+              -s "$candidate/images/pxeboot/initrd.img" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+live_media_root=$(find_live_media_root) || {
+    echo 'Recovery media check failed: live kernel, initramfs, or squashfs image was not found.' >&2
+    exit 1
+}
+
+[[ -s /usr/share/cubelinux/payload.oci.tar ]] || {
+    echo 'Recovery media check failed: embedded offline OCI payload is missing.' >&2
+    exit 1
+}
+[[ -s /usr/share/cubelinux/target-image-ref ]] || {
+    echo 'Recovery media check failed: target image reference is missing.' >&2
+    exit 1
+}
+
+bundle_bytes=0
+for source in \
+    "$live_media_root/LiveOS/squashfs.img" \
+    "$live_media_root/images/pxeboot/vmlinuz" \
+    "$live_media_root/images/pxeboot/initrd.img"; do
+    bytes=$(/usr/bin/stat --format=%s -- "$source")
+    bundle_bytes=$((bundle_bytes + bytes))
+done
+
+maximum_bundle_bytes=$((recovery_partition_bytes - reserved_bytes))
+(( bundle_bytes <= maximum_bundle_bytes )) || {
+    echo "Recovery media is too large for the 16 GiB partition (bundle: ${bundle_bytes} bytes; maximum: ${maximum_bundle_bytes}, including ext4 reserve and 1 GiB working space)." >&2
+    exit 1
+}
+
+echo "Recovery media fits the 16 GiB partition (${bundle_bytes} bytes; ext4 reserve and working space reserved)."

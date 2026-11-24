@@ -1,0 +1,172 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+target_root=${1:?Usage: stage-recovery ROOT_PATH}
+target_root=$(/usr/bin/realpath -e -- "$target_root")
+recovery_label=CUBE_RECOVERY
+root_label=CUBE_ROOT
+recovery_mount=/run/cubelinux-recovery-staging
+minimum_free_bytes=1073741824
+
+fail() {
+    echo "Recovery staging failed: $*" >&2
+    exit 1
+}
+
+find_live_media_root() {
+    local candidate
+    local -a candidates=(/run/initramfs/live /run/install/repo)
+
+    while IFS= read -r candidate; do
+        candidates+=("$candidate")
+    done < <(/usr/bin/findmnt --raw --noheadings --output TARGET)
+
+    for candidate in "${candidates[@]}"; do
+        if [[ -s "$candidate/LiveOS/squashfs.img" && \
+              -s "$candidate/images/pxeboot/vmlinuz" && \
+              -s "$candidate/images/pxeboot/initrd.img" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+find_parent_disk() {
+    local device=${1:?Block device is required}
+    /usr/bin/lsblk --inverse --list --noheadings --paths --output NAME,TYPE -- "$device" |
+        /usr/bin/awk '$2 == "disk" { print $1; exit }'
+}
+
+find_parent_partition() {
+    local device=${1:?Block device is required}
+    /usr/bin/lsblk --inverse --list --noheadings --paths --output NAME,TYPE -- "$device" |
+        /usr/bin/awk '$2 == "part" { print $1; exit }'
+}
+
+partition_span() {
+    local device=${1:?Block device is required}
+    local start sectors
+    start=$(/usr/bin/lsblk --nodeps --noheadings --output START -- "$device" | /usr/bin/tr -d '[:space:]')
+    sectors=$(/usr/sbin/blockdev --getsz "$device")
+    printf '%s %s\n' "$start" "$sectors"
+}
+
+root_device=$(/usr/bin/findmnt --noheadings --raw --output SOURCE --mountpoint "$target_root") ||
+    fail "Calamares did not mount the target root at $target_root"
+root_device=${root_device%%\[*}
+[[ -b "$root_device" ]] || fail "target root source is not a block device: $root_device"
+root_disk=$(find_parent_disk "$root_device")
+[[ -n "$root_disk" ]] || fail "could not identify the target disk for $root_device"
+root_partition=$(find_parent_partition "$root_device")
+[[ -n "$root_partition" ]] || fail "could not identify the target root partition for $root_device"
+
+mapfile -t recovery_candidates < <(/usr/sbin/blkid --match-token "PARTLABEL=$recovery_label" --output device || true)
+matching_recovery_devices=()
+for candidate in "${recovery_candidates[@]}"; do
+    [[ -b "$candidate" ]] || continue
+    candidate_disk=$(find_parent_disk "$candidate")
+    [[ "$candidate_disk" == "$root_disk" ]] || continue
+
+    read -r candidate_start candidate_sectors < <(partition_span "$candidate")
+    read -r root_start root_sectors < <(partition_span "$root_partition")
+    [[ "$candidate_start" =~ ^[0-9]+$ && "$candidate_sectors" =~ ^[0-9]+$ && \
+       "$root_start" =~ ^[0-9]+$ && "$root_sectors" =~ ^[0-9]+$ ]] || continue
+
+    candidate_end=$((candidate_start + candidate_sectors))
+    root_end=$((root_start + root_sectors))
+    # Calamares places the recovery and root entries next to each other. Allow
+    # up to 2 MiB for alignment while distinguishing an older recovery slot.
+    if (( (candidate_end <= root_start && root_start - candidate_end <= 4096) || \
+          (root_end <= candidate_start && candidate_start - root_end <= 4096) )); then
+        matching_recovery_devices+=("$candidate")
+    fi
+done
+
+(( ${#matching_recovery_devices[@]} == 1 )) ||
+    fail "expected one $recovery_label partition on $root_disk; found ${#matching_recovery_devices[@]}"
+recovery_device=${matching_recovery_devices[0]}
+
+root_part_label=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTLABEL -- "$root_partition" || true)
+[[ "$root_part_label" == "$root_label" ]] ||
+    fail "target root partition must have GPT label $root_label; found '${root_part_label:-none}'"
+
+recovery_fs_type=$(/usr/sbin/blkid --noheadings --output value --match-tag TYPE -- "$recovery_device" || true)
+[[ "$recovery_fs_type" == ext4 ]] ||
+    fail "$recovery_label must be ext4; found '${recovery_fs_type:-unknown}'"
+
+root_partuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTUUID -- "$root_partition" || true)
+recovery_partuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTUUID -- "$recovery_device" || true)
+disk_ptuuid=$(/usr/bin/lsblk --nodeps --noheadings --output PTUUID -- "$root_disk" | /usr/bin/tr -d '[:space:]')
+[[ -n "$root_partuuid" && -n "$recovery_partuuid" && -n "$disk_ptuuid" ]] ||
+    fail 'could not record stable GPT identities for the recovery layout'
+
+live_media_root=$(find_live_media_root) ||
+    fail 'could not locate the live ISO kernel, initramfs, and squashfs image'
+[[ -s /usr/share/cubelinux/payload.oci.tar ]] ||
+    fail 'the live installer does not contain the offline OCI payload'
+[[ -s /usr/share/cubelinux/target-image-ref ]] ||
+    fail 'the live installer does not contain its target image reference'
+
+/usr/bin/install -d -m 0755 "$recovery_mount"
+if /usr/bin/mountpoint --quiet "$recovery_mount"; then
+    fail "$recovery_mount is already mounted"
+fi
+/usr/bin/mount --types ext4 --options nodev,nosuid,noexec "$recovery_device" "$recovery_mount"
+recovery_mounted=1
+cleanup() {
+    if (( recovery_mounted )); then
+        /usr/bin/umount "$recovery_mount" || true
+    fi
+}
+trap cleanup EXIT
+
+shopt -s dotglob nullglob
+for item in "$recovery_mount"/*; do
+    [[ "${item##*/}" == lost+found ]] && continue
+    [[ ! -e "$item" ]] || fail "recovery partition is not empty: $item"
+done
+shopt -u dotglob nullglob
+
+bundle_bytes=0
+for source in \
+    "$live_media_root/LiveOS/squashfs.img" \
+    "$live_media_root/images/pxeboot/vmlinuz" \
+    "$live_media_root/images/pxeboot/initrd.img"; do
+    bytes=$(/usr/bin/stat --format=%s -- "$source")
+    bundle_bytes=$((bundle_bytes + bytes))
+done
+available_bytes=$(/usr/bin/df --block-size=1 --output=avail -- "$recovery_mount" |
+    /usr/bin/tail -n 1 | /usr/bin/tr -d '[:space:]')
+[[ "$available_bytes" =~ ^[0-9]+$ ]] || fail 'could not measure recovery partition free space'
+required_bytes=$((bundle_bytes + minimum_free_bytes))
+(( available_bytes >= required_bytes )) ||
+    fail "recovery partition is too small (need ${required_bytes} bytes; have ${available_bytes})"
+
+/usr/bin/install -d -m 0755 "$recovery_mount/LiveOS" "$recovery_mount/boot"
+/usr/bin/cp --reflink=auto -- "$live_media_root/LiveOS/squashfs.img" "$recovery_mount/LiveOS/squashfs.img"
+/usr/bin/cp --reflink=auto -- "$live_media_root/images/pxeboot/vmlinuz" "$recovery_mount/boot/vmlinuz"
+/usr/bin/cp --reflink=auto -- "$live_media_root/images/pxeboot/initrd.img" "$recovery_mount/boot/initrd.img"
+/usr/bin/install -m 0644 /usr/share/cubelinux/target-image-ref "$recovery_mount/CUBELINUX_IMAGE_REF"
+{
+    printf 'format=1\n'
+    printf 'disk_ptuuid=%s\n' "$disk_ptuuid"
+    printf 'root_partuuid=%s\n' "$root_partuuid"
+    printf 'recovery_partuuid=%s\n' "$recovery_partuuid"
+} > "$recovery_mount/CUBELINUX_LAYOUT"
+
+(
+    cd "$recovery_mount"
+    /usr/bin/sha256sum \
+        LiveOS/squashfs.img \
+        boot/vmlinuz \
+        boot/initrd.img \
+        CUBELINUX_IMAGE_REF \
+        CUBELINUX_LAYOUT > SHA256SUMS
+)
+/usr/local/libexec/cubelinux/verify-recovery-bundle "$recovery_mount"
+/usr/bin/sync --file-system "$recovery_mount"
+/usr/bin/umount "$recovery_mount" || fail "could not unmount staged recovery partition $recovery_device"
+recovery_mounted=0
+echo "Staged offline recovery system on $recovery_device (${bundle_bytes} bytes, image $(</usr/share/cubelinux/target-image-ref))."

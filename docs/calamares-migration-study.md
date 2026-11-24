@@ -11,14 +11,14 @@ The work remains split into two independent phases:
   install behavior and disk layout. Do not add a recovery partition in this
   phase.
 - **Phase 2:** add an on-disk recovery environment with one action, factory
-  reset. The reset installs a fresh Cubelinux bootc image and preserves the
+  reset. The reset installs a fresh cubelinux bootc image and preserves the
   recovery environment for future resets.
 
 Account setup remains in Plasma Setup on first boot in both phases.
 
 Two constraints apply to both phases:
 
-- **Offline installation is required.** Keep the release-matched Cubelinux OCI
+- **Offline installation is required.** Keep the release-matched cubelinux OCI
   archive in the ISO and do not make installation or factory reset depend on a
   registry, package mirror, or network connection.
 - **Keep the ISO small.** Disable weak dependencies, avoid packages and assets
@@ -34,7 +34,7 @@ workflow, with account creation and manual partitioning hidden and a patch to
 restrict disk selection to one target. Phase 1 replaces that runtime with a
 Calamares-only image.
 
-The Cubelinux OCI image is embedded in the ISO as an OCI archive. The previous
+The cubelinux OCI image is embedded in the ISO as an OCI archive. The previous
 Anaconda Kickstart integration deployed it with `bootc install to-filesystem`
 and skipped the update-origin fetch check for offline installation. A post
 step removed the installed `/` fstab entry, which is incompatible with the
@@ -63,13 +63,13 @@ is still required.
 Use ChromeOS MiniOS as an architectural reference, not as a requirement to
 copy its A/B system layout. ChromiumOS describes MiniOS as a small recovery OS
 that can repartition a disk, wipe user data, and install a current stable
-system. Its disk layout has dedicated MiniOS A/B partitions. Cubelinux's
+system. Its disk layout has dedicated MiniOS A/B partitions. cubelinux's
 requested first version is smaller: one recovery environment and one visible
 action, factory reset. [MiniOS overview](https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/minios/),
 [ChromiumOS disk format](https://chromium.googlesource.com/chromiumos/docs/+/HEAD/disk_format.md)
 
 The recovery partition should contain a minimal bootable recovery system and
-the release-matched Cubelinux OCI payload, so recovery works without a
+the release-matched cubelinux OCI payload, so recovery works without a
 network. The recovery flow must reinstall the OS and clear all writable
 system/user data while keeping the recovery environment and its boot path
 available for another reset. That means the recovery partition and the
@@ -123,7 +123,7 @@ first-boot account setup, and current non-recovery disk layout.
 2. **Storage flow:** verify that the Calamares profile creates the ext4 target
    layout, presents the intended disk and erase choices, and hides manual
    partitioning. The stock partition module still offers Replace and Alongside
-   when Manual is disabled, so review that behavior against Cubelinux's
+   when Manual is disabled, so review that behavior against cubelinux's
    single-target flow. [partition.conf](https://github.com/calamares/calamares/blob/calamares/src/modules/partition/partition.conf)
 3. **Bootc handoff:** import the embedded OCI payload into local Podman storage
    and run the payload's own `bootc install to-filesystem` in a privileged,
@@ -137,13 +137,13 @@ first-boot account setup, and current non-recovery disk layout.
    after installation.
 5. **VM acceptance:** verify install from the embedded payload with networking
    disabled, ext4, bootloader setup, update origin, and first boot. Check UEFI
-   and any BIOS mode Cubelinux intends to support.
+   and any BIOS mode cubelinux intends to support.
 6. **Size and release cleanup:** recheck the Calamares dependency set and
    remove unneeded modules, packages, and assets while retaining the embedded
    offline payload. Record and compare the ISO size with the current release.
    Update release documentation and workflow.
 
-Phase 1 is complete when a Calamares ISO installs and boots Cubelinux with the
+Phase 1 is complete when a Calamares ISO installs and boots cubelinux with the
 existing behavior. Recovery is explicitly out of scope for this phase.
 
 ## Phase 2: add the factory-reset recovery partition
@@ -151,29 +151,27 @@ existing behavior. Recovery is explicitly out of scope for this phase.
 Start Phase 2 only after Phase 1 is stable. The recovery UI offers one action:
 factory reset. The local, release-matched payload makes reset available
 without networking. Reset clears all mutable OS and user data, installs a
-fresh Cubelinux image, and leaves recovery bootable for the next reset.
+fresh cubelinux image, and leaves recovery bootable for the next reset.
 
-1. **Choose the disk layout:** define the recovery partition, its size and
-   filesystem, the boot entry, and the system partitions that reset may erase.
-2. **Choose the install mechanism:** compare Calamares-managed partitioning
-   with `bootc install to-filesystem` against bootc `to-disk` plus
-   `systemd-repart`. Bootc 1.17.1 supports ext4 and image-supplied `repart.d`
-   definitions; `systemd-repart` can populate a newly created partition from
-   files with `CopyFiles=`. However, `to-disk --wipe` wipes the whole target
-   disk. A reset launched from recovery must not destroy the recovery system
-   while it is running. Prove a safe flow before choosing it. [bootc to-disk
-   manual](https://github.com/bootc-dev/bootc/blob/main/docs/src/man/bootc-install-to-disk.8.md),
-   [systemd-repart `CopyFiles=`](https://www.freedesktop.org/software/systemd/man/latest/repart.d.html)
-3. **Build the recovery image:** create the minimal bootable environment and
-   place its verified OCI payload and metadata on the recovery partition.
-4. **Add and preserve the recovery boot path:** ensure bootc updates and root
+The current Phase 2 design and its small implementation tasks are documented
+in [recovery-partition-design.md](recovery-partition-design.md).
+
+1. **Partition and payload staging:** the installer now configures the
+   `CUBE_RECOVERY` and `CUBE_ROOT` ext4 partitions and copies the release's live
+   kernel, initramfs, SquashFS image, and checksum manifest to recovery. Bundle
+   capacity and partition layout still need VM validation.
+2. **Add and preserve the recovery boot path:** ensure bootc updates and root
    reinstalls cannot remove the recovery entry or required EFI files.
-5. **Add the one-action reset flow:** verify payload and target partition IDs
+3. **Add the one-action reset flow:** verify payload and target partition IDs
    before formatting; reinstall only OS and writable data partitions; retain
-   recovery; reboot into first-boot account setup.
-6. **Recovery acceptance:** test normal boot, recovery boot when the installed
-   root is unavailable, a full reset, and a second reset using the same
-   recovery partition. Verify user data is gone and recovery still boots.
+   recovery; reboot into first-boot account setup. Use
+   `bootc install to-filesystem`, which accepts a filesystem prepared and
+   mounted by the recovery environment. Do not use `bootc install to-disk
+   --wipe`, because it would erase recovery while the reset is running.
+4. **Recovery acceptance:** test Erase, Replace, and Alongside layouts, normal
+   boot, recovery boot when the installed root is unavailable, an offline full
+   reset, and a second reset using the same recovery partition. Verify user
+   data is gone and recovery still boots.
 
 Do not use plain `to-disk --wipe` for factory reset unless the recovery
 partition and its boot path are deliberately recreated and verified. If
@@ -191,7 +189,7 @@ recovery partition.
   must be translated into `bootc install to-filesystem` arguments correctly.
   The payload image must load and run locally in Podman with host devices and
   target mounts visible while networking stays disabled. Validate ext4 feature
-  flags against the actual Cubelinux bootc backend and boot requirements.
+  flags against the actual cubelinux bootc backend and boot requirements.
 - **Phase 2 direct disk install:** The `to-disk` option depends on testing
   embedded OCI import, offline fetch-check behavior, generated fstab, and
   recovery partition recreation. A reset must not erase the environment

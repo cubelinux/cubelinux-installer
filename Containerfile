@@ -62,10 +62,16 @@ RUN mkdir -p /etc/containers && \
 COPY config/calamares/ /etc/calamares/
 COPY scripts/launch-calamares /usr/local/sbin/cubelinux-installer-launch
 COPY scripts/install-bootc /usr/local/libexec/cubelinux/install-bootc
+COPY scripts/stage-recovery /usr/local/libexec/cubelinux/stage-recovery
+COPY scripts/validate-recovery-media /usr/local/libexec/cubelinux/validate-recovery-media
+COPY scripts/verify-recovery-bundle /usr/local/libexec/cubelinux/verify-recovery-bundle
 COPY scripts/cleanup-installed-fstab /usr/local/libexec/cubelinux/cleanup-installed-fstab
 RUN chmod 0755 \
         /usr/local/sbin/cubelinux-installer-launch \
         /usr/local/libexec/cubelinux/install-bootc \
+        /usr/local/libexec/cubelinux/stage-recovery \
+        /usr/local/libexec/cubelinux/validate-recovery-media \
+        /usr/local/libexec/cubelinux/verify-recovery-bundle \
         /usr/local/libexec/cubelinux/cleanup-installed-fstab
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi

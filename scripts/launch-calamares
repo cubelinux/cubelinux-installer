@@ -1,6 +1,8 @@
 #!/usr/bin/bash
 set -euo pipefail
 
+/usr/local/libexec/cubelinux/validate-recovery-media
+
 if [[ "${CUBELINUX_DBUS_SESSION:-0}" != 1 ]]; then
     export CUBELINUX_DBUS_SESSION=1
     exec /usr/bin/dbus-run-session -- "$0" "$@"

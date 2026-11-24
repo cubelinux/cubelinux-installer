@@ -17,10 +17,10 @@ style:
 slideshow: /usr/share/calamares/branding/default/show.qml
 
 strings:
-  productName: Cubelinux
-  shortProductName: Cubelinux
+  productName: cubelinux
+  shortProductName: cubelinux
   version: Rolling
   shortVersion: Rolling
-  versionedName: Cubelinux Rolling
-  shortVersionedName: Cubelinux
-  bootloaderEntryName: Cubelinux
+  versionedName: cubelinux Rolling
+  shortVersionedName: cubelinux
+  bootloaderEntryName: cubelinux

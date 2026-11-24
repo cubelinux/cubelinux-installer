@@ -1,19 +1,21 @@
 # cubelinux-installer
 
+The project name is always written **cubelinux**, in lowercase.
+
 [![Build and publish installer ISO](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml/badge.svg)](https://github.com/cubelinux/cubelinux-installer/actions/workflows/build-and-publish-iso.yml)
 
-Build the bootable Cubelinux installer ISO separately from the operating-system
+Build the bootable cubelinux installer ISO separately from the operating-system
 image. This branch replaces Anaconda with Calamares and embeds the selected
-Cubelinux bootc image for offline installation. Installation does not create a
+cubelinux bootc image for offline installation. Installation does not create a
 user; the installed system should start Plasma Setup on first boot.
 
 ## Current status
 
 The migration branch is Calamares-only: its package set and boot path no longer
-include Anaconda. The implementation is ready for its first ISO build, but it
-still needs end-to-end testing in a disposable virtual machine before release.
-Verify disk selection, offline installation from the embedded image, ext4,
-bootloader setup, skipped account creation, and Plasma Setup after reboot.
+include Anaconda. The Phase 1 installer was built and successfully installed
+and booted by the maintainer. Phase 2 now reserves and populates a recovery
+partition; its boot entry and factory-reset action still need implementation
+and VM validation.
 
 The live installer uses Fedora's stable Fedora 44 bootc base. DNF installs
 required package dependencies from the pinned `eu.edge.kernel.org` Fedora
@@ -32,13 +34,19 @@ not make them available to the ISO build stages.
 
 ## Calamares migration
 
-Calamares is the only installer in this branch. Its configuration uses the
-partition, mount, fstab, and finished modules plus a local bootc deployment job.
-The job imports the embedded OCI archive into Podman storage and runs the
-payload's bootc installer in a network-disabled container. It retains the
-configured registry reference as the installed system's update origin. The
-installer therefore does not need a network connection to install Cubelinux.
-The migration does not add the recovery partition; that remains Phase 2.
+Calamares is the only installer in this branch. Its custom partition layout
+reserves a 16 GiB ext4 `CUBE_RECOVERY` partition and assigns the remaining
+space to the ext4 `CUBE_ROOT` partition. Before showing the installer, a size
+check confirms that the live kernel, initramfs, and SquashFS image fit in the
+recovery partition with 1 GiB free. During installation, a local job copies
+those files and a checksum manifest to the recovery partition. The live
+SquashFS contains the release-matched offline OCI payload.
+
+The bootc deployment job imports the embedded OCI archive into Podman storage
+and runs the payload's bootc installer in a network-disabled container. It
+retains the configured registry reference as the installed system's update
+origin. Factory-reset boot selection and the reset action are the remaining
+recovery work.
 
 The ISO must stay small while preserving the embedded offline payload. Weak
 DNF dependencies are disabled, and the build record reports the final ISO and
@@ -102,7 +110,7 @@ machine-readable byte or layer progress.
 ```text
 cubelinux-installer/
 |-- config/
-|   |-- calamares/              # Calamares sequence, modules, and Cubelinux branding
+|   |-- calamares/              # Calamares sequence, modules, and cubelinux branding
 |   `-- iso.yaml                # ISO boot menu and media label
 |-- .github/workflows/
 |   `-- build-and-publish-iso.yml # Build on main pushes and upload to SourceForge
@@ -110,6 +118,8 @@ cubelinux-installer/
 |   |-- build-iso.sh             # Build installer image and ISO
 |   |-- launch-calamares         # Start the Calamares Wayland session
 |   |-- install-bootc            # Import and install/finalize the embedded OCI payload
+|   |-- stage-recovery           # Copy live boot assets onto the recovery partition
+|   |-- validate-recovery-media  # Check recovery bundle size before installation
 |   |-- cleanup-installed-fstab  # Remove the composefs root fstab entry
 |-- .gitignore
 |-- Containerfile                # Calamares live installer image
