@@ -156,9 +156,9 @@ partitions. Updates only maintain recovery on installations that already have it
   release bundles.
 - Recovery integrity checks detect accidental damage. A mutable ext4
   recovery partition is not a verified-boot security boundary.
-- The standalone recovery GRUB image is unsigned. Installation
-  stops before partitioning when UEFI Secure Boot is enabled, until a signed
-  recovery boot chain is provided.
+- The standalone recovery GRUB image is unsigned. Secure Boot does not block
+  starting Calamares or installing the normal OS, but factory recovery cannot
+  boot until a signed recovery boot chain is provided.
 
 ## References
 

@@ -171,8 +171,10 @@ in [recovery-partition-design.md](recovery-partition-design.md).
 4. **Recovery acceptance:** test Erase, Replace, and Alongside layouts, normal
    boot, recovery boot when the installed root is unavailable, an offline full
    reset, and a second reset using the same recovery partition. Verify user
-   data is gone and recovery still boots. The current prototype requires UEFI
-   with Secure Boot disabled and does not offer encrypted root installations.
+   data is gone and recovery still boots. The Fedora-signed installer ISO can
+   boot with Secure Boot enabled, but the current unsigned recovery bootloader
+   makes factory recovery unavailable in that mode. Encrypted root
+   installations are not supported by the current prototype.
 5. **Recovery updates:** the installed system stages a second recovery slot
    from the booted image digest. Validate slot activation and interruption
    handling with actual release images.

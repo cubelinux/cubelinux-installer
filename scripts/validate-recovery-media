@@ -5,17 +5,9 @@ set -euo pipefail
     echo 'Recovery requires the installer to boot in UEFI mode.' >&2
     exit 1
 }
-secure_boot=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
-[[ -f "$secure_boot" ]] || {
-    echo 'Recovery setup could not determine the UEFI Secure Boot state.' >&2
-    exit 1
-}
-secure_boot_state=$(/usr/bin/od -An -j4 -N1 -t u1 -- "$secure_boot" | /usr/bin/tr -d '[:space:]')
-case "$secure_boot_state" in
-    0) ;;
-    1) echo 'Recovery boot is not yet signed for Secure Boot. Disable Secure Boot to install this recovery prototype.' >&2; exit 1 ;;
-    *) echo 'Recovery setup could not determine the UEFI Secure Boot state.' >&2; exit 1 ;;
-esac
+# The Fedora-signed ISO can start Calamares with Secure Boot enabled. The
+# separate recovery GRUB image is unsigned, so Secure Boot limits recovery
+# boot only; it must not block installing the normal OS.
 
 # Each slot is limited to 14 GiB, leaving room for two bundles and ext4 reserve.
 maximum_bundle_bytes=$((14 * 1024 * 1024 * 1024))
