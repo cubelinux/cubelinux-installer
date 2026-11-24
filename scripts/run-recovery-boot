@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+set -uo pipefail
+
+marker=/run/cubelinux-recovery-unavailable
+if [[ -s "$marker" ]]; then
+    printf 'Skipping recovery boot setup; recovery staging was unavailable.\n%s\n' \
+        "$(<"$marker")" >&2
+    exit 0
+fi
+
+if boot_output=$(/usr/local/libexec/cubelinux/install-recovery-boot "$@" 2>&1); then
+    printf '%s\n' "$boot_output"
+else
+    {
+        printf 'recovery-boot setup failed\n'
+        printf '%s\n' "$boot_output"
+    } > "$marker"
+    printf 'Recovery boot setup failed; continuing OS installation.\n%s\n' \
+        "$boot_output" >&2
+fi
+
+exit 0

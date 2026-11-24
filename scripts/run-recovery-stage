@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+set -uo pipefail
+
+marker=/run/cubelinux-recovery-unavailable
+/usr/bin/rm -f -- "$marker"
+
+if validation_output=$(/usr/local/libexec/cubelinux/validate-recovery-media 2>&1); then
+    :
+else
+    {
+        printf 'recovery-media-check failed\n'
+        printf '%s\n' "$validation_output"
+    } > "$marker"
+    printf 'Recovery setup is unavailable; continuing OS installation.\n%s\n' \
+        "$validation_output" >&2
+    exit 0
+fi
+
+if stage_output=$(/usr/local/libexec/cubelinux/stage-recovery "$@" 2>&1); then
+    printf '%s\n' "$stage_output"
+else
+    {
+        printf 'stage-recovery failed\n'
+        printf '%s\n' "$stage_output"
+    } > "$marker"
+    printf 'Recovery staging failed; continuing OS installation.\n%s\n' \
+        "$stage_output" >&2
+fi
+
+exit 0

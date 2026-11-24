@@ -69,6 +69,8 @@ COPY output/recovery-app/ /usr/lib/cubelinux-recovery/
 COPY output/recovery-app/recovery-ui /usr/local/libexec/cubelinux/recovery-ui
 COPY scripts/launch-calamares /usr/local/sbin/cubelinux-installer-launch
 COPY output/recovery-app/runtime/install-bootc /usr/local/libexec/cubelinux/install-bootc
+COPY scripts/run-recovery-stage /usr/local/libexec/cubelinux/run-recovery-stage
+COPY scripts/run-recovery-boot /usr/local/libexec/cubelinux/run-recovery-boot
 COPY scripts/stage-recovery /usr/local/libexec/cubelinux/stage-recovery
 COPY scripts/validate-recovery-media /usr/local/libexec/cubelinux/validate-recovery-media
 COPY output/recovery-app/runtime/verify-recovery-bundle /usr/local/libexec/cubelinux/verify-recovery-bundle
@@ -79,6 +81,8 @@ COPY output/recovery-app/runtime/cleanup-installed-fstab /usr/local/libexec/cube
 RUN chmod 0755 \
         /usr/local/sbin/cubelinux-installer-launch \
         /usr/local/libexec/cubelinux/install-bootc \
+        /usr/local/libexec/cubelinux/run-recovery-stage \
+        /usr/local/libexec/cubelinux/run-recovery-boot \
         /usr/local/libexec/cubelinux/stage-recovery \
         /usr/local/libexec/cubelinux/validate-recovery-media \
         /usr/local/libexec/cubelinux/verify-recovery-bundle \
