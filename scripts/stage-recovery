@@ -89,24 +89,24 @@ done
     fail "expected one $recovery_label partition on $root_disk; found ${#matching_recovery_devices[@]}"
 recovery_device=${matching_recovery_devices[0]}
 
-root_part_label=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTLABEL -- "$root_partition" || true)
+root_part_label=$(/usr/sbin/blkid --output value --match-tag PARTLABEL -- "$root_partition" || true)
 [[ "$root_part_label" == "$root_label" ]] ||
     fail "target root partition must have GPT label $root_label; found '${root_part_label:-none}'"
 
-recovery_fs_type=$(/usr/sbin/blkid --noheadings --output value --match-tag TYPE -- "$recovery_device" || true)
+recovery_fs_type=$(/usr/sbin/blkid --output value --match-tag TYPE -- "$recovery_device" || true)
 [[ "$recovery_fs_type" == ext4 ]] ||
     fail "$recovery_label must be ext4; found '${recovery_fs_type:-unknown}'"
 
-root_partuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTUUID -- "$root_partition" || true)
-recovery_partuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTUUID -- "$recovery_device" || true)
-disk_ptuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PTUUID -- "$root_disk" || true)
+root_partuuid=$(/usr/sbin/blkid --output value --match-tag PARTUUID -- "$root_partition" || true)
+recovery_partuuid=$(/usr/sbin/blkid --output value --match-tag PARTUUID -- "$recovery_device" || true)
+disk_ptuuid=$(/usr/sbin/blkid --output value --match-tag PTUUID -- "$root_disk" || true)
 efi_device=$(/usr/bin/findmnt --noheadings --raw --output SOURCE --mountpoint "$target_root/boot/efi" || true)
 efi_device=${efi_device%%\[*}
 [[ -b "$efi_device" ]] || fail 'the target EFI system partition is not mounted'
 efi_partition=$(find_parent_partition "$efi_device")
 [[ -n "$efi_partition" && "$(find_parent_disk "$efi_partition")" == "$root_disk" ]] ||
     fail 'the EFI system partition must be on the same disk as the target root'
-efi_partuuid=$(/usr/sbin/blkid --noheadings --output value --match-tag PARTUUID -- "$efi_partition" || true)
+efi_partuuid=$(/usr/sbin/blkid --output value --match-tag PARTUUID -- "$efi_partition" || true)
 [[ -n "$root_partuuid" && -n "$recovery_partuuid" && -n "$disk_ptuuid" && -n "$efi_partuuid" ]] ||
     fail 'could not record stable GPT identities for the recovery layout'
 
